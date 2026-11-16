@@ -2,6 +2,8 @@
 
 `hibernator restore --project PATH --dry-run` inspects supported dependency manifests throughout one Git repository and prints suggestions. It does not run package managers, access the network, create virtual environments, or modify the project.
 
+The preview requires the selected Git root. It ignores nested Git repositories, symlinked or reparse-point entries, and directories on another filesystem device. Manifest and lockfile evidence must be a regular non-link file. Read-only traversal is path-based and can race with concurrent filesystem changes; this check is not a deletion safety guarantee.
+
 ## Monorepos
 
 - Each `package.json` is associated with the nearest ancestor directory containing a recognized Node lockfile. Packages that resolve to one lockfile share one suggested install step at that lockfile directory. Independently locked nested projects receive their own working-directory hint.
