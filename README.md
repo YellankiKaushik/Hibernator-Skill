@@ -84,13 +84,15 @@ Tests construct and delete only their own temporary Git fixtures. They do not ta
 
 ## Platform and host verification
 
+The [GitHub Actions run for the published revision](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43814217765) completed successfully: all 18 jobs passed across Windows, Ubuntu, and macOS, with Python 3.10–3.14. Each full unittest job ran 52 tests and skipped three Windows-junction cases; those skips are unverified behavior, not passes. Wheel build, fresh-environment installation, console entry point, and packaged skill-file checks passed in the matrix.
+
 | Environment | Status |
 |---|---|
-| Windows | Python 3.14.10; latest run: 52 tests, 46 passed, 6 skipped because symlink, junction, and hard-link creation was denied |
-| Linux | Not tested |
-| macOS | Not tested |
-| Codex | Skill metadata surfaced in the current Codex session; separate invocation not tested |
-| Gemini CLI, Antigravity | Skill metadata packaged; discovery/invocation not tested |
+| Windows | Python 3.10–3.14 passed in GitHub Actions; three Windows-junction tests skipped in each full suite. Local Windows 3.14 run skipped six link/junction cases due host restrictions. |
+| Linux | Python 3.10–3.14 passed in GitHub Actions; Windows-junction cases skipped by design. |
+| macOS | Python 3.10–3.14 passed in GitHub Actions; Windows-junction cases skipped by design. |
+| Codex | Skill metadata was surfaced in the current session; a separate invocation from an unrelated project is not yet verified. |
+| Gemini CLI, Antigravity | Skill packaged; discovery and invocation not tested. |
 | Claude Code | Not included in MVP |
 
 Do not interpret a documented discovery path as a tested compatibility claim. See [CHANGELOG](CHANGELOG.md) for implementation status and [release checklist](docs/RELEASE.md) for outstanding owner gates.
