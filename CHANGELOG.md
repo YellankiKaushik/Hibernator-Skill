@@ -1,9 +1,16 @@
 # Changelog
 
+Changes for each unreleased version are recorded here. No GitHub Release, tag, or PyPI publication has been created.
+
 ## Unreleased — 0.1.0
 
-- Added a deterministic Python CLI, portable Agent Skill, Git-aware read-only scanner, conservative allowlisted rules, plan digest and stale-plan validation, JSON/text reporting, and restore preview.
-- Added synthetic Git fixture tests and Windows/Linux CI configuration.
-- Added exact-digest interactive approval/refusal reports, saved cleanup report lookup, default path redaction, CLI reference, usage examples, contributor guidance, and FAQ.
-- R3 follow-up added mocked reparse/root-identity and staged-plan safety tests, case-variant and nested-Git checks, more truthful interrupted-removal outcomes, and an explicit wheel data-file entry for the Agent Skill. Expanded CI configuration to Windows, Ubuntu, and macOS with package and adversarial jobs; no hosted run has occurred.
-- Production deletion is intentionally disabled pending platform security and owner policy review. No license or release has been selected.
+- Consolidated C-01 through C-08 development into the existing implementation, preserving its commit history.
+- Fixed nested cache matching and added realistic Node dependency-tree and Python editable-install classification coverage. Node package `data/` and unknown contents remain protected or for review unless safe regeneration is established.
+- Hardened scan and restore-preview traversal around symlinks/reparse points, nested Git repositories, and filesystem-device boundaries; added outside-sentinel fixtures and monorepo restore guidance.
+- Documented separate Agent Skill and Python CLI installation. Recorded actual Codex session testing and kept Gemini CLI and Antigravity invocation labeled unverified.
+- Added an unwired POSIX descriptor-relative cleanup prototype restricted to registered synthetic test fixtures. Production deletion remains disabled.
+- Made POSIX cleanup report replacement flush its parent directory and documented filesystem/security limitations.
+- Updated the README, CLI/agent/release guidance, package license metadata, and hands-on preview test guide.
+- Added the standard MIT License, copyright 2026 YellankiKaushik, as selected by the repository owner.
+- Latest feature-branch validation passed 18/18 Windows/Ubuntu/macOS × Python 3.10–3.14 Actions jobs, including wheel install and CLI/skill package smoke checks. See the release matrix for test counts and unverified skips; final `main` CI will be recorded after consolidation.
+- No production cleanup, GitHub Release, tag, or PyPI publication was performed.
