@@ -1,23 +1,36 @@
-# Agent setup
+# Agent setup and verification
 
 ## Canonical skill
 
-The repository includes `.agents/skills/hibernator/SKILL.md`. It uses the shared Agent Skills `name` and `description` frontmatter and calls the local CLI. Its metadata was present in the current Codex session's available-skill catalog. An end-to-end invocation through the host was not tested; Gemini CLI and Antigravity were unavailable.
+The repository includes `.agents/skills/hibernator/SKILL.md` using the shared Agent Skills `name` and `description` frontmatter. It asks the host to invoke the local deterministic CLI and forbids agent approval or deletion commands. A packaged skill file alone does not prove a host can discover or invoke it.
 
-## Codex
+The Skills CLI supports installing a local skill into either a project or the current user's shared skill directory. From the project that should receive the skill, run:
 
-Keep the repository-level `.agents/skills/hibernator/` directory in the workspace. **Discovery verified with limitation:** the current Codex session listed Hibernator from the workspace skill directory. A separate host invocation smoke test was not performed. Use the standalone CLI if the skill is not discovered in another Codex setup.
+```text
+gh skill install <path-to-Hibernator-Skill> hibernator --from-local --allow-hidden-dirs --agent codex --scope project
+```
 
-## Gemini CLI
+For the current user-wide installation, run:
 
-Keep `.agents/skills/hibernator/` in the workspace. Gemini CLI may use `.agents/skills` or its documented `.gemini/skills` integration; this project's discovery is **Not Tested**. Use the standalone CLI if needed.
+```text
+gh skill install <path-to-Hibernator-Skill> hibernator --from-local --allow-hidden-dirs --agent codex --scope user
+```
 
-## Google Antigravity
+The `--allow-hidden-dirs` option is needed because the source skill is under `.agents/`. Review the skill contents before trusting it; the CLI warns that hidden-directory skills may be untrusted. Project installation places the skill in the project's `.agents/skills/hibernator/`; user installation uses the host's shared user skill directory. The official [Codex CLI skills documentation](https://developers.openai.com/api/reference/cli) describes project and user scope installation. These commands install the skill; they do not install the Hibernator Python package or its CLI dependency.
 
-Keep `.agents/skills/hibernator/` in the workspace. Antigravity's discovery is **Not Tested for Hibernator**. Use the standalone CLI if needed.
+## Verification status
+
+| Host or capability | Evidence | Status and limitation |
+|---|---|---|
+| Skills CLI project install | Ran the local-source command against a disposable Git project and verified the installed `SKILL.md` path and contents. | Verified in an isolated smoke test. |
+| Skills CLI user install | Ran the user-scope command with an isolated temporary user home and verified the installed `SKILL.md` path and contents. | Verified without changing the real user skill directory. |
+| Codex host invocation | Attempted `codex exec` against a disposable project with the installed project-scoped skill. | **Not verified.** The installed Codex CLI rejected the configured model as unsupported for this ChatGPT account. No host task completed. |
+| Gemini CLI | Checked availability. | **Not tested:** CLI not installed. |
+| Google Antigravity | Desktop launcher was present. | **Not tested:** no host invocation performed. |
+| Current Codex session discovery | The skill metadata was present in the session catalog. | Discovery only; this is not evidence of host invocation. |
 
 ## Any other agent
 
-An agent with local terminal access may use `python -m hibernator ...` directly. If it cannot run local commands, it can only explain the documentation and cannot inspect or clean a laptop project. Google Colab can only access files mounted into its runtime; it cannot reclaim laptop storage by default.
+An agent with local terminal access may use `python -m hibernator ...` directly. If it cannot run local commands, it can only explain the documentation and cannot inspect a developer's local project. Colab and remote agents can only access files explicitly mounted or provided to their runtime.
 
-Agents may scan and prepare plans but cannot approve real deletion. Production apply is disabled in this MVP.
+Agents may scan and prepare plans but cannot approve real deletion. Production apply is disabled in this preview implementation.
