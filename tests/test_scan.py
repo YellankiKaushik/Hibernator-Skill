@@ -29,6 +29,34 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(["Node.js"], report.technologies)
         self.assertGreater(node.logical_bytes, 0)
 
+    def test_nested_cache_rules_match_and_plan_inside_monorepo(self):
+        fixture = GitFixture()
+        try:
+            fixture.write(
+                "packages/web/package.json",
+                '{"dependencies":{"next":"synthetic","vite":"synthetic"}}\n',
+            )
+            fixture.commit("packages/web/package.json")
+            fixture.write("packages/web/.next/cache/build-manifest.json", "{}\n")
+            fixture.write("packages/web/node_modules/.vite/deps/chunk.js", "export {};\n")
+
+            report = scan(fixture.root)
+            by_path = {item.path: item for item in report.items}
+            next_cache = "packages/web/.next/cache"
+            vite_cache = "packages/web/node_modules/.vite"
+
+            self.assertEqual("REGENERABLE", by_path[next_cache].decision)
+            self.assertEqual("next-cache-v1", by_path[next_cache].rule_id)
+            self.assertEqual("REGENERABLE", by_path[vite_cache].decision)
+            self.assertEqual("vite-cache-v1", by_path[vite_cache].rule_id)
+
+            plan = make_plan(fixture.root)
+            candidates = {candidate["path"] for candidate in plan["candidates"]}
+            self.assertIn(next_cache, candidates)
+            self.assertIn(vite_cache, candidates)
+        finally:
+            fixture.close()
+
     def test_secret_database_unknown_ignored_and_source_are_preserved(self):
         self.fixture.write(".env.local", "TOKEN=synthetic-secret-value\n")
         self.fixture.write("local.sqlite", b"synthetic-db")
