@@ -1,0 +1,70 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unittest:
+    env:
+      PYTHONPATH: src
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Show runtime
+        run: |
+          python --version
+          git --version
+      - name: Run synthetic fixture suite
+        run: python -m unittest discover -v
+      - name: Check CLI help
+        run: python -m hibernator --help
+      - name: Build wheel
+        run: python -m pip wheel --no-deps --wheel-dir wheelhouse .
+      - name: Create package test environment (Unix)
+        if: runner.os != 'Windows'
+        run: python -m venv .wheel-test
+      - name: Install wheel and test console entry point (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          .wheel-test/bin/python -m pip install --no-index --no-deps --find-links wheelhouse hibernator-skill==0.1.0
+          .wheel-test/bin/hibernator --help
+          .wheel-test/bin/python -c "import sys; from pathlib import Path; assert (Path(sys.prefix) / '.agents/skills/hibernator/SKILL.md').is_file()"
+      - name: Create package test environment (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python -m venv .wheel-test
+      - name: Install wheel and test console entry point (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & .\.wheel-test\Scripts\python.exe -m pip install --no-index --no-deps --find-links wheelhouse hibernator-skill==0.1.0
+          & .\.wheel-test\Scripts\hibernator.exe --help
+          & .\.wheel-test\Scripts\python.exe -c "import sys; from pathlib import Path; assert (Path(sys.prefix) / '.agents' / 'skills' / 'hibernator' / 'SKILL.md').is_file()"
+
+  adversarial-fixtures:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Run filesystem boundary and plan tests
+        run: python -m unittest -v tests.test_scan tests.test_plans tests.test_cleanup
