@@ -6,6 +6,8 @@ Hibernator is a local, Git-aware Python tool for inspecting one development repo
 
 The preview can scan, classify, validate plans, save reports, and show restoration guidance. It **cannot delete files from a user's project**. Even a correct interactive approval ends with an unsupported-operation report and no project changes. No disk space is reclaimed by this version.
 
+Current cross-platform validation: [GitHub Actions run #13](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43848601766) passed 18/18 jobs on the consolidated `main` commit. See the [release gate matrix](docs/RELEASE_GATE_MATRIX.md) for platform skips and remaining security gates.
+
 ## Contents
 
 - [Overview](#overview)

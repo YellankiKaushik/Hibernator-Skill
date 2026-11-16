@@ -19,9 +19,9 @@ The suite covers project-root validation, Git-tracked and untracked preservation
 
 ## Latest cross-platform evidence
 
-[GitHub Actions run #12](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43832996714) passed all 18/18 jobs on the C-08 feature branch: 15 Windows/Ubuntu/macOS × Python 3.10–3.14 test, wheel/install, CLI, and packaged-skill jobs, plus 3 OS adversarial fixture jobs. The preceding full source/security matrix, [run #11](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43831231379), ran 78 tests in each of its 15 unit jobs and 47 tests in each of 3 adversarial jobs. The unit jobs skipped four Windows-junction cases per OS/Python job; Windows also skipped the POSIX-only directory-fsync test. Each adversarial job skipped its three Windows-junction cases. These are unverified cases, not passes.
+[Final `main` run #13](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43848601766) passed all 18/18 jobs on commit `b43430893d890183498a85c49c85d47bc642a998`: 15 Windows/Ubuntu/macOS × Python 3.10–3.14 unit, wheel/install, CLI, and packaged-skill jobs, plus 3 OS adversarial fixture jobs. Every unit job ran 78 tests and each adversarial job ran 47 tests. Linux/macOS unit jobs each skipped four Windows-junction cases; Windows unit jobs skipped the same four plus the POSIX-only directory-fsync case. Each adversarial job skipped three Windows-junction cases. Skipped security cases remain unverified, not passes.
 
-The local Windows Python 3.14.10 run completed 78 tests with 10 skips: Windows junction, symlink, and hard-link creation restrictions plus the POSIX-only directory-fsync test. The [release gate matrix](RELEASE_GATE_MATRIX.md) tracks the exact unresolved platform/security scope. Final `main` CI evidence will be added after the consolidation push.
+The local Windows Python 3.14.10 run completed 78 tests with 10 skips: Windows junction, symlink, and hard-link creation restrictions plus the POSIX-only directory-fsync test. The [release gate matrix](RELEASE_GATE_MATRIX.md) tracks the exact unresolved platform/security scope. The release gate matrix records the current remaining platform and production-security gaps.
 
 ## Packaging checks
 
