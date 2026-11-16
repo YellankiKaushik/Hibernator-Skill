@@ -1,15 +1,21 @@
 # Release checklist
 
-The implementation has local validation, but is not ready to enable production cleanup or publish a public release. Before either:
+The source repository is public, but Hibernator remains a **preview-only implementation with production deletion disabled**. No tagged release or package has been published. The current cross-platform build and test evidence is [GitHub Actions run #2](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43814217765): 18 of 18 jobs passed on Windows, Ubuntu, and macOS for Python 3.10–3.14. Each full unittest job ran 52 tests; three Windows-junction tests were skipped because the runner did not permit junction creation. Those cases remain unverified.
 
-- [ ] Owner reviews the P0 filesystem and human-approval decisions (OQ-001/OQ-002).
-- [ ] A platform security review validates path-race, junction/reparse, mount, hardlink, and interruption controls.
-- [ ] Close the evidence and reviewer fields in [the independent security gate](SECURITY_REVIEW_GATE.md) and [release matrix](RELEASE_GATE_MATRIX.md).
-- [ ] Automated tests run successfully on Windows, Linux, and macOS; the current Windows run has 6 policy-driven link/reparse/hard-link skips, and Linux/macOS remain untested.
-- [ ] Codex invocation is smoke-tested (workspace discovery was observed in this session); Gemini CLI and Antigravity remain labeled Not Tested until their hosts can be exercised.
+Before a preview release:
+
+- [x] Build the wheel and install it into a fresh virtual environment on Windows, Ubuntu, and macOS; verify the `hibernator` entry point and packaged skill file in CI.
+- [x] Run the Python 3.10–3.14 test matrix on Windows, Ubuntu, and macOS.
+- [ ] Verify actual invocation from Codex in an unrelated project and test other agent hosts before claiming support. Keep unavailable hosts labeled unverified.
 - [ ] Owner selects a license and confirms attribution obligations.
-- [ ] Build the wheel and install-test its `hibernator` console entry point and packaged skill file in an environment with setuptools available; local build could not fetch the backend due network name-resolution failure.
-- [ ] Review docs, test evidence, release notes, and the exact proposed diff.
-- [ ] Obtain separate owner approval before push, tag, or public release.
+- [ ] Review the exact proposed release diff and release notes.
+- [ ] Obtain explicit owner approval before creating a tag, publishing a release, or publishing a package.
 
-No compatibility, benchmark, free-space, or restoration-success claim should be made without actual evidence.
+Before enabling production deletion, all of the following are required independently of preview publication:
+
+- [ ] Complete the platform-specific filesystem design and the threat model in [the security review gate](SECURITY_REVIEW_GATE.md).
+- [ ] Run external-sentinel, race, interruption, and recovery tests on each supported OS/filesystem combination, including the skipped Windows junction scenarios.
+- [ ] Obtain independent filesystem-security review of the exact source revision and record reviewer evidence in [the release matrix](RELEASE_GATE_MATRIX.md).
+- [ ] Obtain explicit owner approval for any change that enables production deletion.
+
+No compatibility, benchmark, physical free-space, or restoration-success claim should exceed measured evidence. A successful preview CI run does not establish production deletion safety.
