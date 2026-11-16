@@ -32,6 +32,24 @@ def is_reparse_point(info: os.stat_result) -> bool:
     return bool(attrs & reparse)
 
 
+def is_regular_nofollow(path: Path) -> bool:
+    """Return true only for a regular, non-link/non-reparse directory entry."""
+    try:
+        info = path.lstat()
+    except OSError:
+        return False
+    return stat.S_ISREG(info.st_mode) and not is_reparse_point(info)
+
+
+def is_directory_nofollow(path: Path) -> bool:
+    """Return true only for a real directory entry, never a link or reparse point."""
+    try:
+        info = path.lstat()
+    except OSError:
+        return False
+    return stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode) and not is_reparse_point(info)
+
+
 def tree_fingerprint(path: Path) -> str:
     """Hash names, types, identities, and sizes without following links."""
     rows: list[tuple] = []
@@ -68,12 +86,16 @@ def tree_fingerprint(path: Path) -> str:
     return hashlib.sha256(canonical_json(rows)).hexdigest()
 
 
-def logical_size(path: Path) -> int:
+def logical_size(path: Path, *, boundary_device: int | None = None) -> int:
     total = 0
+    if boundary_device is None:
+        boundary_device = int(path.lstat().st_dev)
     stack = [path]
     while stack:
         current = stack.pop()
         info = current.lstat()
+        if int(info.st_dev) != boundary_device:
+            continue
         if stat.S_ISLNK(info.st_mode) or is_reparse_point(info):
             continue
         if stat.S_ISDIR(info.st_mode):
@@ -81,6 +103,8 @@ def logical_size(path: Path) -> int:
                 for entry in entries:
                     child = Path(entry.path)
                     child_info = child.lstat()
+                    if int(child_info.st_dev) != boundary_device:
+                        continue
                     if stat.S_ISDIR(child_info.st_mode) and not stat.S_ISLNK(child_info.st_mode) and not is_reparse_point(child_info):
                         stack.append(child)
                     elif stat.S_ISREG(child_info.st_mode):
