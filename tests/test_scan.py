@@ -83,6 +83,47 @@ class ScanTests(unittest.TestCase):
         self.assertEqual("BLOCKED", node.decision)
         self.assertIn("nested Git boundary", node.reason)
 
+    def test_nested_git_repository_is_not_searched_for_technology_markers(self):
+        nested = self.fixture.root / "vendor" / "nested-repository"
+        (nested / ".git").mkdir(parents=True)
+        (nested / "pyproject.toml").write_text("[project]\nname='nested'\n", encoding="utf-8")
+        report = scan(self.fixture.root)
+        self.assertNotIn("Python", report.technologies)
+
+    def test_mocked_reparse_subtree_is_not_searched_for_manifests(self):
+        linked = self.fixture.root / "vendor" / "reparse-project"
+        linked.mkdir(parents=True)
+        (linked / "pyproject.toml").write_text("[project]\nname='linked'\n", encoding="utf-8")
+        info = linked.lstat()
+        target_identity = (info.st_dev, info.st_ino)
+        real_check = discovery.is_reparse_point
+
+        def is_mock_reparse(value):
+            return (value.st_dev, value.st_ino) == target_identity or real_check(value)
+
+        with patch("hibernator.discovery.is_reparse_point", side_effect=is_mock_reparse), patch(
+            "hibernator.rules.is_reparse_point", side_effect=is_mock_reparse
+        ), patch("hibernator.util.is_reparse_point", side_effect=is_mock_reparse):
+            report = scan(self.fixture.root)
+        self.assertNotIn("Python", report.technologies)
+
+    def test_symlinked_manifest_outside_root_is_not_read_as_project_context(self):
+        fixture = GitFixture()
+        outside = fixture.root.parent / "outside-manifest"
+        outside.write_text('{"dependencies":{"react":"synthetic"}}\n', encoding="utf-8")
+        try:
+            (fixture.root / "package-lock.json").write_text('{"lockfileVersion":3}\n', encoding="utf-8")
+            (fixture.root / "package.json").symlink_to(outside)
+        except OSError as exc:
+            fixture.close()
+            self.skipTest(f"file symlink creation unavailable: {exc}")
+        try:
+            report = scan(fixture.root)
+            self.assertNotIn("Node.js", report.technologies)
+            self.assertEqual(outside.read_text(encoding="utf-8"), '{"dependencies":{"react":"synthetic"}}\n')
+        finally:
+            fixture.close()
+
     def test_case_variant_secret_blocks_or_preserves(self):
         self.fixture.write(".ENV.LOCAL", "synthetic token\n")
         self.fixture.write("node_modules/pkg/CREDENTIALS.JSON", "synthetic credential\n")
@@ -181,6 +222,24 @@ class ScanTests(unittest.TestCase):
             node = next(item for item in scan(self.fixture.root).items if item.path == "node_modules")
         self.assertEqual("BLOCKED", node.decision)
         self.assertIn("reparse point", node.reason)
+
+    def test_mocked_mount_crossing_blocks_candidate_before_counting_child_tree(self):
+        mount = self.fixture.root / "node_modules" / "mounted-package"
+        mount.mkdir()
+        (mount / "package.json").write_text('{"name":"mounted"}\n', encoding="utf-8")
+        real_same_device = discovery._same_device
+        mount_identity = (mount.lstat().st_dev, mount.lstat().st_ino)
+
+        def same_device(path, device):
+            info = Path(path).lstat()
+            if (info.st_dev, info.st_ino) == mount_identity:
+                return False
+            return real_same_device(path, device)
+
+        with patch("hibernator.discovery._same_device", side_effect=same_device):
+            node = next(item for item in scan(self.fixture.root).items if item.path == "node_modules")
+        self.assertEqual("BLOCKED", node.decision)
+        self.assertIn("filesystem boundary", node.reason)
 
     def test_root_identity_change_fails_scan(self):
         real_identity = discovery.identity
