@@ -20,9 +20,9 @@ No. `restore --dry-run` only prints suggestions. A developer may later run a pac
 
 The CLI scan, plan, report, and restore preview make no network calls. Installing the package may require setuptools from a local cache or package index. A checkout can be used with `PYTHONPATH=src` and `python -m hibernator` without a package install.
 
-## Which agents discover the skill?
+## Which agents can use the skill?
 
-The canonical `.agents/skills/hibernator/SKILL.md` is included and validated for its metadata and policy. Actual discovery has not been tested in Codex, Gemini CLI, or Antigravity in this environment. Use the standalone CLI when native discovery is unavailable.
+The repo contains `.agents/skills/hibernator/SKILL.md`. Codex, Gemini CLI, and Google Antigravity document support for the Agent Skills format and `.agents/skills/` discovery, but Hibernator-specific invocation was verified only in one Codex session. Gemini CLI was not installed and Antigravity did not launch in the test environment. See [agent setup](AGENTS.md) for the tested/unverified split and installation commands. Installing the Python package is still required separately.
 
 ## Can I use this on a Colab notebook to clean my laptop?
 
