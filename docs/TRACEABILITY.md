@@ -1,6 +1,6 @@
-# Implementation traceability snapshot
+# Historical implementation traceability snapshot
 
-Status is based on source and actual local execution. The final 2026-11-16 Windows run used Python 3.14.10: 52 tests ran, 46 passed, and 6 were skipped because symlink/junction/hard-link creation was denied by host policy.
+> **Historical snapshot:** this matrix records pre-consolidation evidence from the 2026-11-16 Windows Python 3.14.10 run (52 tests, 46 passed, 6 skipped). It is retained for traceability and is not the current validation status. See [the current testing record](TESTING.md) and [release gate matrix](RELEASE_GATE_MATRIX.md) for the C-01 through C-08 cross-platform results and remaining production gates.
 
 | PRD requirements | Implementation evidence | Verification status in this environment |
 |---|---|---|
