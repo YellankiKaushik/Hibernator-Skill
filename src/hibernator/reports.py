@@ -130,6 +130,22 @@ def _safe_directory(directory: Path, project_root: Path | None) -> Path:
     return resolved
 
 
+def _fsync_parent_directory(path: Path) -> None:
+    """Persist a rename on POSIX filesystems that expose directory handles."""
+    if os.name != "posix":
+        return
+    if not hasattr(os, "O_DIRECTORY"):
+        raise OSError("Cannot durably journal report: directory fsync is unavailable.")
+    flags = os.O_RDONLY | os.O_DIRECTORY
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    directory_fd = os.open(path.parent, flags)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
 def save_report(report: dict[str, Any], *, directory: Path | None = None, project_root: Path | None = None) -> Path:
     directory = _safe_directory(directory or report_directory(), project_root)
     directory.mkdir(parents=True, exist_ok=True)
@@ -145,6 +161,7 @@ def save_report(report: dict[str, Any], *, directory: Path | None = None, projec
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temp_name, path)
+        _fsync_parent_directory(path)
         try:
             path.chmod(0o600)
         except OSError:
