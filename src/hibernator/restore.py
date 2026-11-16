@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 
 from .discovery import canonical_root
+from .git_state import read_git_state
+from .util import is_directory_nofollow, is_regular_nofollow, is_reparse_point
 
 
 NODE_LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock")
@@ -11,7 +13,14 @@ PYTHON_MANIFESTS = ("pyproject.toml", "requirements.txt", "Pipfile", "setup.py")
 SKIP_DIRS = {".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycache__", ".tox", "dist", "build"}
 
 
-def _manifest_directories(root: Path) -> tuple[list[Path], list[Path]]:
+def _same_device(path: Path, device: int) -> bool:
+    try:
+        return int(path.lstat().st_dev) == device
+    except OSError:
+        return False
+
+
+def _manifest_directories(root: Path, root_device: int) -> tuple[list[Path], list[Path]]:
     node: list[Path] = []
     python: list[Path] = []
 
@@ -20,10 +29,28 @@ def _manifest_directories(root: Path) -> tuple[list[Path], list[Path]]:
 
     for current, dirs, files in os.walk(root, topdown=True, onerror=fail_on_walk_error, followlinks=False):
         base = Path(current)
-        dirs[:] = [name for name in dirs if name not in SKIP_DIRS and not (base / name).is_symlink()]
-        if "package.json" in files:
+        if base != root and (base / ".git").exists():
+            dirs[:] = []
+            continue
+        safe_dirs = []
+        for name in dirs:
+            child = base / name
+            try:
+                info = child.lstat()
+            except OSError:
+                continue
+            if (
+                name not in SKIP_DIRS
+                and is_directory_nofollow(child)
+                and not is_reparse_point(info)
+                and _same_device(child, root_device)
+            ):
+                safe_dirs.append(name)
+        dirs[:] = safe_dirs
+        safe_files = {name for name in files if is_regular_nofollow(base / name)}
+        if "package.json" in safe_files:
             node.append(base)
-        if any(name in files for name in PYTHON_MANIFESTS):
+        if any(name in safe_files for name in PYTHON_MANIFESTS):
             python.append(base)
     return sorted(node), sorted(python)
 
@@ -36,7 +63,7 @@ def _relative(path: Path, root: Path) -> str:
 def _nearest_node_lock(project: Path, root: Path) -> tuple[Path | None, list[str]]:
     current = project
     while True:
-        lockfiles = [name for name in NODE_LOCKFILES if (current / name).is_file()]
+        lockfiles = [name for name in NODE_LOCKFILES if is_regular_nofollow(current / name)]
         if lockfiles:
             return current, lockfiles
         if current == root:
@@ -54,9 +81,11 @@ def _node_command(lockfile: str) -> str:
 
 def restore_preview(project: str | Path) -> dict:
     root = canonical_root(project)
+    read_git_state(root)
     commands: list[str] = []
     warnings: list[str] = []
-    node_projects, python_projects = _manifest_directories(root)
+    root_device = int(root.lstat().st_dev)
+    node_projects, python_projects = _manifest_directories(root, root_device)
 
     # Resolve each package manifest to its nearest ancestor lockfile. Workspace
     # packages consequently share one suggestion, while independently locked
@@ -94,7 +123,7 @@ def restore_preview(project: str | Path) -> dict:
 
     for project_dir in python_projects:
         rel = _relative(project_dir, root)
-        present = {name for name in PYTHON_MANIFESTS if (project_dir / name).is_file()}
+        present = {name for name in PYTHON_MANIFESTS if is_regular_nofollow(project_dir / name)}
         commands.append(f"Python project {rel}: python -m venv .venv")
         commands.append(f"Python project {rel}: activate .venv before installing")
         if "requirements.txt" in present:
