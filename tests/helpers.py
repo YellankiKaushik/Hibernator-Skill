@@ -17,6 +17,8 @@ class GitFixture:
         subprocess.run(["git", "-C", str(self.root), "config", "user.name", "Fixture"], check=True)
         subprocess.run(["git", "-C", str(self.root), "config", "user.email", "fixture@example.invalid"], check=True)
         subprocess.run(["git", "-C", str(self.root), "config", "core.autocrlf", "false"], check=True)
+        subprocess.run(["git", "-C", str(self.root), "config", "maintenance.auto", "false"], check=True)
+        subprocess.run(["git", "-C", str(self.root), "config", "gc.auto", "0"], check=True)
         _register_test_owned_root(self.root)
         self.closed = False
 
