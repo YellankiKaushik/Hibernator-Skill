@@ -47,9 +47,16 @@ def _marker_exists(marker: str, start: Path, project_root: Path) -> bool:
 
 
 def rule_for(path: Path, project_root: Path) -> tuple[dict | None, str | None]:
-    name = path.name
+    try:
+        relative_parts = path.relative_to(project_root).parts
+    except ValueError:
+        return None, None
     for rule in RULES:
-        if name not in rule["paths"]:
+        if not any(
+            len(relative_parts) >= len(rule_parts := tuple(pattern.split("/")))
+            and relative_parts[-len(rule_parts) :] == rule_parts
+            for pattern in rule["paths"]
+        ):
             continue
         required = rule.get("requires", [])
         if not all(_marker_exists(marker, path.parent, project_root) for marker in required):
