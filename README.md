@@ -66,7 +66,7 @@ An ignored `.env`, local database, dataset, model, upload, unrecognized cache, o
 
 ## Agent integrations
 
-The canonical skill is [.agents/skills/hibernator/SKILL.md](.agents/skills/hibernator/SKILL.md). Install the local skill for a project or for the current user with the [Skills CLI](docs/AGENTS.md#canonical-skill); the CLI installation smoke test passed for both scopes in disposable locations. The Codex host invocation remains unverified because the installed CLI rejected the configured model for this ChatGPT account. Gemini CLI was unavailable and Antigravity was not invoked. These are distinct checks: a packaged skill or successful installation does not establish that a host can invoke it. Hibernator's standalone CLI remains usable independently of agent integrations.
+The canonical skill is [.agents/skills/hibernator/SKILL.md](.agents/skills/hibernator/SKILL.md). Installing this skill and installing the Python CLI are separate steps; see [agent setup](docs/AGENTS.md). The Skills CLI installation smoke test passed for both project and user scope in disposable locations. A read-only scan workflow also ran successfully in this Codex session on a disposable Git project. A separate `codex exec` invocation remains unverified because the installed CLI rejected the configured model for this ChatGPT account. Gemini CLI was unavailable; the Antigravity launcher was present, but desktop control could not initialize for a host invocation. A packaged or installed skill alone does not prove that a host can invoke it.
 
 ## Safety and recovery
 
