@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from hibernator.errors import ApplyRefused, InvalidPlan
 from hibernator.plans import make_plan
-from hibernator.secure_remove import UnsupportedDeletionPlatform, remove_test_fixture_candidate
+from hibernator.secure_remove import UnsupportedDeletionPlatform, _preflight, remove_test_fixture_candidate
 from tests.helpers import node_fixture
 
 
@@ -24,6 +24,15 @@ class DescriptorRelativeRemovalTests(unittest.TestCase):
 
     def tearDown(self):
         self.fixture.close()
+
+    def _preflight_package(self):
+        package = self.fixture.root / "node_modules/pkg"
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        directory_fd = os.open(package, flags)
+        try:
+            _preflight(directory_fd, os.fstat(directory_fd).st_dev)
+        finally:
+            os.close(directory_fd)
 
     def test_posix_removes_only_planned_fixture_candidate_and_preserves_external_sentinel(self):
         if os.name == "nt":
@@ -56,6 +65,10 @@ class DescriptorRelativeRemovalTests(unittest.TestCase):
         self.assertEqual(self.sentinel_before, hashlib.sha256(self.sentinel.read_bytes()).hexdigest())
 
     def test_symlink_entry_refuses_before_removing_any_candidate_file(self):
+        if os.name == "nt":
+            with self.assertRaises(UnsupportedDeletionPlatform):
+                remove_test_fixture_candidate(self.plan, "node_modules")
+            return
         outside = self.fixture.root.parent / "outside-link-target"
         outside.mkdir()
         target = outside / "sentinel.txt"
@@ -69,14 +82,17 @@ class DescriptorRelativeRemovalTests(unittest.TestCase):
                     remove_test_fixture_candidate(self.plan, "node_modules")
                 return
             self.skipTest(f"symlink creation unavailable: {exc}")
-        self.plan = make_plan(self.fixture.root)
         expected_error = UnsupportedDeletionPlatform if os.name == "nt" else ApplyRefused
         with self.assertRaises(expected_error):
-            remove_test_fixture_candidate(self.plan, "node_modules")
+            self._preflight_package()
         self.assertTrue((self.fixture.root / "node_modules/pkg/index.js").is_file())
         self.assertEqual(b"outside link target\n", target.read_bytes())
 
     def test_hardlink_entry_refuses_and_external_sentinel_stays_unchanged(self):
+        if os.name == "nt":
+            with self.assertRaises(UnsupportedDeletionPlatform):
+                remove_test_fixture_candidate(self.plan, "node_modules")
+            return
         linked = self.fixture.root / "node_modules/pkg/external-hardlink"
         try:
             os.link(self.sentinel, linked)
@@ -86,10 +102,9 @@ class DescriptorRelativeRemovalTests(unittest.TestCase):
                     remove_test_fixture_candidate(self.plan, "node_modules")
                 return
             self.skipTest(f"hard-link creation unavailable: {exc}")
-        self.plan = make_plan(self.fixture.root)
         expected_error = UnsupportedDeletionPlatform if os.name == "nt" else ApplyRefused
         with self.assertRaises(expected_error):
-            remove_test_fixture_candidate(self.plan, "node_modules")
+            self._preflight_package()
         self.assertTrue((self.fixture.root / "node_modules/pkg/index.js").is_file())
         self.assertEqual(self.sentinel_before, hashlib.sha256(self.sentinel.read_bytes()).hexdigest())
 
