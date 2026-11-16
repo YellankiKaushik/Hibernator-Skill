@@ -1,7 +1,28 @@
 # Testing
 
-Run the standard-library suite with `python -m unittest discover -v` from the repository root. Tests create temporary Git repositories with synthetic manifests, source files, dependencies, ignored unknown data, and protected sentinels. Cleanup is limited to those temporary roots.
+Run from the repository root with Python 3.10 or later and Git available:
 
-The suite covers scanner classification, Git-tracked and untracked preservation, secrets and local data, ignored unknown files, real and mocked symlink/reparse handling, Windows junctions, hard-link guards, lockfile context, staged/unstaged and tampered/stale plans, production and noninteractive apply refusal, test-only fixture cleanup, interruption journaling, restoration preview, report secrecy and lookup, JSON output, and skill metadata. The [published GitHub Actions run #2](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43814217765) passed all 18 Windows/Ubuntu/macOS jobs on Python 3.10–3.14. Each full unittest job ran 52 tests and skipped three Windows-junction tests; these remain unverified. The dedicated adversarial jobs passed. The earlier local Python 3.14.10 run ran 52 tests: 46 passed and 6 skipped because Windows denied symlink privilege, junction creation, and external-sentinel hard-link creation. Permission-denied and mount-boundary behavior are not fully claimed as verified.
+```sh
+python -m unittest discover -v
+python -m compileall -q src tests
+python -m hibernator --help
+python -m hibernator doctor
+python -m hibernator rules list
+python -m pip wheel --no-deps --wheel-dir dist .
+```
 
-CI is configured for Windows, Ubuntu, and macOS with Python 3.10–3.14, including a wheel/console smoke and a separate adversarial-fixture job. The current published run is linked above; it supersedes this report's earlier local package-build limitation. Local wheel building may still require access to a package cache or package index for `setuptools>=68`.
+The standard-library suite creates temporary, synthetic Git repositories. Any fixture cleanup is limited to test-owned temporary roots. Never pass a real project path to a destructive test helper. The public CLI `apply` path must continue to refuse real deletion; `secure_remove.py` is an unwired fixture-only POSIX prototype.
+
+## Coverage
+
+The suite covers project-root validation, Git-tracked and untracked preservation, unknown/ignored data, secret-like files, Node and Python dependency evidence, `.pth` editable-install provenance, nested cache rules, traversal boundaries, mocked reparse and mount behavior, link/hard-link guards, nested Git boundaries, plan digests and stale plans, exact approval refusal, test-fixture cleanup, reports, interruption journal outcomes, restore previews and monorepo manifest selection, CLI output/exit codes, and Agent Skill metadata.
+
+## Latest cross-platform evidence
+
+[GitHub Actions run #12](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43832996714) passed all 18/18 jobs on the C-08 feature branch: 15 Windows/Ubuntu/macOS × Python 3.10–3.14 test, wheel/install, CLI, and packaged-skill jobs, plus 3 OS adversarial fixture jobs. The preceding full source/security matrix, [run #11](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43831231379), ran 78 tests in each of its 15 unit jobs and 47 tests in each of 3 adversarial jobs. The unit jobs skipped four Windows-junction cases per OS/Python job; Windows also skipped the POSIX-only directory-fsync test. Each adversarial job skipped its three Windows-junction cases. These are unverified cases, not passes.
+
+The local Windows Python 3.14.10 run completed 78 tests with 10 skips: Windows junction, symlink, and hard-link creation restrictions plus the POSIX-only directory-fsync test. The [release gate matrix](RELEASE_GATE_MATRIX.md) tracks the exact unresolved platform/security scope. Final `main` CI evidence will be added after the consolidation push.
+
+## Packaging checks
+
+CI builds the wheel, creates a fresh virtual environment, installs the wheel without installing extra runtime dependencies, runs the installed `hibernator --help`, and verifies that `.agents/skills/hibernator/SKILL.md` was packaged. The local wheel build may fetch the declared `setuptools>=77` build backend when it is not already available. See [the workflow](../.github/workflows/test.yml) for the exact matrix and package checks.
