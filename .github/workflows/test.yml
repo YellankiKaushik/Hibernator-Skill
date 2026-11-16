@@ -37,6 +37,8 @@ jobs:
         run: python -m venv .wheel-test
       - name: Install wheel and test console entry point (Unix)
         if: runner.os != 'Windows'
+        env:
+          PYTHONPATH: ''
         run: |
           .wheel-test/bin/python -m pip install --no-index --no-deps --find-links wheelhouse hibernator-skill==0.1.0
           .wheel-test/bin/hibernator --help
@@ -48,6 +50,8 @@ jobs:
       - name: Install wheel and test console entry point (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          PYTHONPATH: ''
         run: |
           & .\.wheel-test\Scripts\python.exe -m pip install --no-index --no-deps --find-links wheelhouse hibernator-skill==0.1.0
           & .\.wheel-test\Scripts\hibernator.exe --help
