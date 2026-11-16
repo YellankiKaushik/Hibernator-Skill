@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -52,6 +53,8 @@ def node_fixture() -> GitFixture:
 
 
 def make_junction(link: Path, target: Path) -> bool:
+    if os.name != "nt":
+        return False
     command = f'mklink /J "{link}" "{target}"'
     result = subprocess.run(["cmd.exe", "/c", command], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     return result.returncode == 0
