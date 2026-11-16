@@ -66,13 +66,13 @@ An ignored `.env`, local database, dataset, model, upload, unrecognized cache, o
 
 ## Agent integrations
 
-The canonical skill is [.agents/skills/hibernator/SKILL.md](.agents/skills/hibernator/SKILL.md). It tells an agent to call the CLI, explain its findings, and leave approval to a human. Host-specific installation notes and their current verification status are in [Agent setup](docs/AGENTS.md). The current Codex session recognized the skill metadata, but an end-to-end host invocation was not tested; Gemini CLI and Antigravity are untested. The standalone CLI is the fallback for any agent with local terminal access.
+The canonical skill is [.agents/skills/hibernator/SKILL.md](.agents/skills/hibernator/SKILL.md). Installing this skill and installing the Python CLI are separate steps; see [agent setup](docs/AGENTS.md). The Skills CLI installation smoke test passed for both project and user scope in disposable locations. A read-only scan workflow also ran successfully in this Codex session on a disposable Git project. A separate `codex exec` invocation remains unverified because the installed CLI rejected the configured model for this ChatGPT account. Gemini CLI was unavailable; the Antigravity launcher was present, but desktop control could not initialize for a host invocation. A packaged or installed skill alone does not prove that a host can invoke it.
 
 ## Safety and recovery
 
 Read [the safety model](docs/SAFETY.md) before using plans. A plan digest is an integrity check, not authentication. Agents must not impersonate a human approver. Real cleanup is disabled pending a platform security review. See the [independent review gate](docs/SECURITY_REVIEW_GATE.md) and [release gate matrix](docs/RELEASE_GATE_MATRIX.md). If cleanup is enabled in a later release, approval must be direct, interactive, and bound to the exact root and digest.
 
-Restore guidance only describes regenerating supported dependencies. It cannot recreate deleted personal data, private downloads, secrets, databases, or remote services. `restore --dry-run` never executes installers; package managers may use the network and run lifecycle scripts when a developer later chooses to run them.
+Restore guidance only describes regenerating supported dependencies. Monorepo grouping, nested projects, and ambiguity warnings are detailed in [restoration guidance](docs/RESTORE_GUIDANCE.md). It cannot recreate deleted personal data, private downloads, secrets, databases, or remote services. `restore --dry-run` never executes installers; package managers may use the network and run lifecycle scripts when a developer later chooses to run them.
 
 ## Development
 
@@ -84,13 +84,15 @@ Tests construct and delete only their own temporary Git fixtures. They do not ta
 
 ## Platform and host verification
 
+The [GitHub Actions run for the published revision](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43814217765) completed successfully: all 18 jobs passed across Windows, Ubuntu, and macOS, with Python 3.10–3.14. Each full unittest job ran 52 tests and skipped three Windows-junction cases; those skips are unverified behavior, not passes. Wheel build, fresh-environment installation, console entry point, and packaged skill-file checks passed in the matrix.
+
 | Environment | Status |
 |---|---|
-| Windows | Python 3.14.10; latest run: 52 tests, 46 passed, 6 skipped because symlink, junction, and hard-link creation was denied |
-| Linux | Not tested |
-| macOS | Not tested |
-| Codex | Skill metadata surfaced in the current Codex session; separate invocation not tested |
-| Gemini CLI, Antigravity | Skill metadata packaged; discovery/invocation not tested |
+| Windows | Python 3.10–3.14 passed in GitHub Actions; three Windows-junction tests skipped in each full suite. Local Windows 3.14 run skipped six link/junction cases due host restrictions. |
+| Linux | Python 3.10–3.14 passed in GitHub Actions; Windows-junction cases skipped by design. |
+| macOS | Python 3.10–3.14 passed in GitHub Actions; Windows-junction cases skipped by design. |
+| Codex | Skill metadata was surfaced in the current session; a separate invocation from an unrelated project is not yet verified. |
+| Gemini CLI, Antigravity | Skill packaged; discovery and invocation not tested. |
 | Claude Code | Not included in MVP |
 
 Do not interpret a documented discovery path as a tested compatibility claim. See [CHANGELOG](CHANGELOG.md) for implementation status and [release checklist](docs/RELEASE.md) for outstanding owner gates.

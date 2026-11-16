@@ -1,15 +1,25 @@
-# Release checklist
+# Release checklists
 
-The implementation has local validation, but is not ready to enable production cleanup or publish a public release. Before either:
+Hibernator is a **preview-only implementation with production deletion disabled**. `apply_production()` refuses cleanup on every platform. The fixture-only POSIX deletion prototype is not connected to the CLI and is not a supported user operation. No tagged release or package has been published.
 
-- [ ] Owner reviews the P0 filesystem and human-approval decisions (OQ-001/OQ-002).
-- [ ] A platform security review validates path-race, junction/reparse, mount, hardlink, and interruption controls.
-- [ ] Close the evidence and reviewer fields in [the independent security gate](SECURITY_REVIEW_GATE.md) and [release matrix](RELEASE_GATE_MATRIX.md).
-- [ ] Automated tests run successfully on Windows, Linux, and macOS; the current Windows run has 6 policy-driven link/reparse/hard-link skips, and Linux/macOS remain untested.
-- [ ] Codex invocation is smoke-tested (workspace discovery was observed in this session); Gemini CLI and Antigravity remain labeled Not Tested until their hosts can be exercised.
-- [ ] Owner selects a license and confirms attribution obligations.
-- [ ] Build the wheel and install-test its `hibernator` console entry point and packaged skill file in an environment with setuptools available; local build could not fetch the backend due network name-resolution failure.
-- [ ] Review docs, test evidence, release notes, and the exact proposed diff.
-- [ ] Obtain separate owner approval before push, tag, or public release.
+## Preview release checklist
 
-No compatibility, benchmark, free-space, or restoration-success claim should be made without actual evidence.
+- [x] Build the wheel, install it into fresh environments, verify the installed `hibernator` command, and verify the packaged skill file in CI. See the current evidence in [the release gate matrix](RELEASE_GATE_MATRIX.md).
+- [x] Run the complete Windows, Ubuntu, and macOS matrix across Python 3.10–3.14 for the latest cleanup prototype revision. Any runner skips remain unverified; see the matrix for the exact run and skipped cases.
+- [x] Document that the Agent Skill and standalone Python CLI are separate installations.
+- [x] Verify one real Codex session workflow on a disposable Git project. Gemini CLI is not installed in the available environment; Antigravity invocation could not be tested because desktop control did not initialize. Neither host is claimed as verified.
+- [ ] Owner selects a license and approves its attribution obligations.
+- [ ] Owner reviews the exact proposed preview release diff and notes.
+- [ ] Owner explicitly approves creating a tag, publishing a release, or publishing a package.
+
+## Production release checklist
+
+- [ ] Complete the platform-specific threat model and filesystem design in [the security review gate](SECURITY_REVIEW_GATE.md).
+- [ ] Resolve root/ancestor relocation races and concurrent-writer behavior. The current fixture prototype does not satisfy this gate.
+- [ ] Implement and independently review a no-follow backend for each explicitly supported operating system and filesystem. Windows deletion is unsupported in the prototype.
+- [ ] Define durable replay protection and a human approval boundary that cannot be satisfied by a generic agent response.
+- [ ] Run adversarial external-sentinel, race, interruption, and recovery tests on every supported OS/filesystem. Privilege-dependent skips count as unverified.
+- [ ] Obtain independent filesystem-security review of the exact implementation revision and record the evidence in [the release gate matrix](RELEASE_GATE_MATRIX.md).
+- [ ] Obtain explicit owner approval before any change enables production deletion.
+
+Preview publication does not authorize production cleanup. No compatibility, reclaimed-storage, physical free-space, or restoration-success claim should exceed measured evidence.

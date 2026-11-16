@@ -14,6 +14,8 @@ hibernator doctor [--format text|json]
 hibernator rules list [--format text|json]
 ```
 
+Restore scans manifests in nested projects, associates Node projects with the nearest ancestor lockfile, and warns about ambiguous lockfiles or unverified managers. It groups packages that share a lockfile and shows per-project working-directory hints; it never invokes installers. See [restoration guidance](RESTORE_GUIDANCE.md) for monorepo behavior and limitations.
+
 The same commands work through `python -m hibernator`. Text is the default. JSON is versioned for saved reports (`schema_version: "1"`); saved plan files use plan schema `2`. Scan items carry relative paths, a decision, category, logical byte estimate, reason, matching rule where applicable, and restoration hint. Cleanup reports separate calculated candidate bytes, logical bytes removed, remaining project logical bytes, and observed volume free-space delta. The volume delta is advisory and may include unrelated activity or filesystem behavior.
 
 ## Apply and approval status

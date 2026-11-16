@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 from pathlib import Path
 
 from . import RULE_PACK_VERSION
+from .util import is_regular_nofollow, is_reparse_point
 
 
 RULES = [
@@ -23,7 +26,7 @@ def _marker_exists(marker: str, start: Path, project_root: Path) -> bool:
     while True:
         if marker.startswith("package.json:"):
             package = current / "package.json"
-            if package.is_file():
+            if is_regular_nofollow(package):
                 try:
                     data = json.loads(package.read_text(encoding="utf-8"))
                     dependency = marker.split(":", 1)[1]
@@ -33,9 +36,9 @@ def _marker_exists(marker: str, start: Path, project_root: Path) -> bool:
                 except (OSError, UnicodeError, json.JSONDecodeError):
                     pass
         elif "*" in marker:
-            if any(current.glob(marker)):
+            if any(is_regular_nofollow(candidate) for candidate in current.glob(marker)):
                 return True
-        elif (current / marker).is_file():
+        elif is_regular_nofollow(current / marker):
             return True
         if current == project_root or current.parent == current:
             return False
@@ -47,9 +50,16 @@ def _marker_exists(marker: str, start: Path, project_root: Path) -> bool:
 
 
 def rule_for(path: Path, project_root: Path) -> tuple[dict | None, str | None]:
-    name = path.name
+    try:
+        relative_parts = path.relative_to(project_root).parts
+    except ValueError:
+        return None, None
     for rule in RULES:
-        if name not in rule["paths"]:
+        if not any(
+            len(relative_parts) >= len(rule_parts := tuple(pattern.split("/")))
+            and relative_parts[-len(rule_parts) :] == rule_parts
+            for pattern in rule["paths"]
+        ):
             continue
         required = rule.get("requires", [])
         if not all(_marker_exists(marker, path.parent, project_root) for marker in required):
@@ -63,21 +73,38 @@ def rule_for(path: Path, project_root: Path) -> tuple[dict | None, str | None]:
 
 def technology_markers(root: Path) -> list[str]:
     found: set[str] = set()
-    skip = {".git", "node_modules", ".venv", "venv", "__pycache__"}
-    for current, dirs, files in __import__("os").walk(root, followlinks=False):
-        dirs[:] = [d for d in dirs if d not in skip and not (Path(current) / d).is_symlink()]
-        names = set(files)
+    skip = {".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycache__"}
+    root_device = int(root.lstat().st_dev)
+    def fail_on_walk_error(error: OSError) -> None:
+        raise error
+
+    for current, dirs, files in os.walk(root, topdown=True, onerror=fail_on_walk_error, followlinks=False):
+        base = Path(current)
+        if base != root and (base / ".git").exists():
+            dirs[:] = []
+            continue
+        safe_dirs = []
+        for name in dirs:
+            child = base / name
+            try:
+                info = child.lstat()
+            except OSError:
+                continue
+            if name not in skip and stat.S_ISDIR(info.st_mode) and not is_reparse_point(info) and int(info.st_dev) == root_device:
+                safe_dirs.append(name)
+        dirs[:] = safe_dirs
+        names = {name for name in files if is_regular_nofollow(base / name)}
         if names & {"pyproject.toml", "requirements.txt", "Pipfile", "setup.py"}:
             found.add("Python")
         if "package.json" in names:
             found.add("Node.js")
             try:
-                text = (Path(current) / "package.json").read_text(encoding="utf-8")
+                text = (base / "package.json").read_text(encoding="utf-8")
                 if any(key in text for key in ('"react"', '"react-dom"')):
                     found.add("React")
-                if '"next"' in text or any((Path(current) / marker).exists() for marker in ("next.config.js", "next.config.mjs", "next.config.ts")):
+                if '"next"' in text or any(is_regular_nofollow(base / marker) for marker in ("next.config.js", "next.config.mjs", "next.config.ts")):
                     found.add("Next.js")
-                if '"vite"' in text or any((Path(current) / marker).exists() for marker in ("vite.config.js", "vite.config.ts")):
+                if '"vite"' in text or any(is_regular_nofollow(base / marker) for marker in ("vite.config.js", "vite.config.ts")):
                     found.add("Vite")
             except (OSError, UnicodeError):
                 pass

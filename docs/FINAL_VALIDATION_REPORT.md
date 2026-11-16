@@ -1,5 +1,7 @@
 # Hibernator Final Validation Report
 
+> **Historical snapshot:** This report records the pre-publication validation state as of 2026-11-16. The later published revision completed [GitHub Actions run #2](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43814217765) successfully (18/18 jobs; Windows, Ubuntu, and macOS; Python 3.10–3.14). Each full test job ran 52 tests and skipped three Windows-junction cases. CI also built and installed the wheel, checked the console entry point, and verified the packaged skill file. These results supersede the pre-publication CI/package status below, but do not close production deletion or independent security-review gates. See the current [release gate matrix](RELEASE_GATE_MATRIX.md).
+
 **Date:** 2026-11-16  
 **Scope:** Local preview-only release candidate plus R3 resolution checks. This is a validation snapshot recorded before repository publication; at that time, no push, tag, release, or real-project cleanup had occurred.
 
