@@ -18,15 +18,27 @@ gh skill install <path-to-Hibernator-Skill> hibernator --from-local --allow-hidd
 
 The `--allow-hidden-dirs` option is needed because the source skill is under `.agents/`. Review the skill contents before trusting it; the CLI warns that hidden-directory skills may be untrusted. Project installation places the skill in the project's `.agents/skills/hibernator/`; user installation uses the host's shared user skill directory. The official [Codex CLI skills documentation](https://developers.openai.com/api/reference/cli) describes project and user scope installation. These commands install the skill; they do not install the Hibernator Python package or its CLI dependency.
 
+## Install the Python CLI separately
+
+The skill is only the agent-facing instructions. Install the Python package from the cloned repository as a separate step:
+
+```text
+python -m pip install .
+python -m hibernator doctor
+```
+
+For development from a checkout, `python -m pip install -e .` is also supported. The skill invokes `python -m hibernator`, so the Python interpreter available to the host's terminal must be the one where Hibernator was installed. `doctor` verifies the command environment. Installing only the skill leaves the CLI dependency unavailable; installing only the package does not install a host skill.
+
 ## Verification status
 
 | Host or capability | Evidence | Status and limitation |
 |---|---|---|
 | Skills CLI project install | Ran the local-source command against a disposable Git project and verified the installed `SKILL.md` path and contents. | Verified in an isolated smoke test. |
 | Skills CLI user install | Ran the user-scope command with an isolated temporary user home and verified the installed `SKILL.md` path and contents. | Verified without changing the real user skill directory. |
-| Codex host invocation | Attempted `codex exec` against a disposable project with the installed project-scoped skill. | **Not verified.** The installed Codex CLI rejected the configured model as unsupported for this ChatGPT account. No host task completed. |
+| Codex skill workflow | In the current Codex session, followed the skill's read-only scan workflow against a disposable Git project. | Verified for this session and local CLI environment; this does not establish that `codex exec` works with the installed CLI configuration. |
+| Codex CLI subprocess | Attempted `codex exec` against a disposable project with the installed project-scoped skill. | **Not verified.** The installed Codex CLI rejected the configured model as unsupported for this ChatGPT account. No CLI-hosted task completed. |
 | Gemini CLI | Checked availability. | **Not tested:** CLI not installed. |
-| Google Antigravity | Desktop launcher was present. | **Not tested:** no host invocation performed. |
+| Google Antigravity | Desktop launcher was present; attempted to inspect the app through the available desktop control. | **Not verified:** desktop control failed to initialize, so no host invocation was performed. |
 | Current Codex session discovery | The skill metadata was present in the session catalog. | Discovery only; this is not evidence of host invocation. |
 
 ## Any other agent
