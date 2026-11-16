@@ -31,7 +31,7 @@ class RestoreAndCliTests(unittest.TestCase):
         before = sorted(p.relative_to(self.fixture.root).as_posix() for p in self.fixture.root.rglob("*"))
         preview = restore_preview(self.fixture.root)
         after = sorted(p.relative_to(self.fixture.root).as_posix() for p in self.fixture.root.rglob("*"))
-        self.assertIn("npm ci", preview["commands"])
+        self.assertIn("Node project .: npm ci", preview["commands"])
         self.assertEqual(before, after)
         self.assertTrue(all("network" in warning.lower() or "lifecycle" in warning.lower() for warning in preview["warnings"]))
 
@@ -48,6 +48,41 @@ class RestoreAndCliTests(unittest.TestCase):
         result = restore_preview(self.fixture.root)
         self.assertEqual([], result["commands"])
         self.assertTrue(any("Multiple Node lockfiles" in warning for warning in result["warnings"]))
+
+    def test_monorepo_restore_groups_node_workspace_and_lists_nested_python_project(self):
+        self.fixture.write("apps/web/package.json", '{"name":"web"}\n')
+        self.fixture.write("services/api/pyproject.toml", "[project]\nname='api'\n")
+        self.fixture.write("services/api/requirements.txt", "flask==3.0.0\n")
+        self.fixture.write("apps/web/node_modules/ignored/package.json", '{"name":"not-a-project"}\n')
+        before = sorted(path.relative_to(self.fixture.root).as_posix() for path in self.fixture.root.rglob("*"))
+
+        result = restore_preview(self.fixture.root)
+
+        after = sorted(path.relative_to(self.fixture.root).as_posix() for path in self.fixture.root.rglob("*"))
+        self.assertEqual(before, after)
+        self.assertEqual(1, sum("npm ci" in command for command in result["commands"]))
+        self.assertIn("Node project .: npm ci", result["commands"])
+        self.assertIn("Python project services/api: python -m venv .venv", result["commands"])
+        self.assertIn("Python project services/api: python -m pip install -r requirements.txt", result["commands"])
+        self.assertTrue(any("Nested Node manifests" in warning for warning in result["warnings"]))
+        self.assertTrue(all("ignored" not in command for command in result["commands"]))
+
+    def test_nested_node_lockfile_gets_own_restore_working_directory(self):
+        self.fixture.write("apps/isolated/package.json", '{"name":"isolated"}\n')
+        self.fixture.write("apps/isolated/yarn.lock", "# synthetic lock\n")
+        result = restore_preview(self.fixture.root)
+        self.assertIn("Node project apps/isolated: yarn install --immutable", result["commands"])
+        self.assertIn("Node project .: npm ci", result["commands"])
+
+    def test_nested_node_project_without_lockfile_warns_without_guessing_manager(self):
+        other = GitFixture()
+        try:
+            other.write("tools/independent/package.json", '{"name":"independent"}\n')
+            result = restore_preview(other.root)
+            self.assertTrue(any("Node manifest at tools/independent has no recognized lockfile" in warning for warning in result["warnings"]))
+            self.assertIn("Review package.json at tools/independent and use that project's chosen package manager.", result["commands"])
+        finally:
+            other.close()
 
     def test_scan_json_is_valid_and_clean(self):
         out = io.StringIO()
