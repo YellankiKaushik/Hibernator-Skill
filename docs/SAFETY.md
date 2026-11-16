@@ -8,6 +8,9 @@
 - Tracked descendants, secret-like files, common databases/downloads/user-data directories, nested Git metadata, links/reparse points, and mount crossings block a whole candidate.
 - Git ignore status is never evidence of disposability. Unknown files are preserved or marked `REVIEW`.
 - Scan, plan, report, and restore preview do not install dependencies, write into the target project, or contact a network service.
+- Scan and restore traversal reject existing symlinked/reparse entries, do not cross filesystem-device boundaries, and stop at nested Git repositories. Manifest files must be regular non-link files inside the selected Git root.
+
+These path-based read-only walks are not an atomic filesystem snapshot and are not a race-resistant deletion design. Concurrent replacement during a walk can invalidate its observations; any output is advisory, and production apply remains disabled pending a separate descriptor/handle-based implementation and independent review.
 
 ## Plan and approval boundary
 
