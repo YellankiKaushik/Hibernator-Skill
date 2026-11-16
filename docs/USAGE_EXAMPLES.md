@@ -1,6 +1,6 @@
 # Usage examples
 
-All examples below are illustrative and use synthetic project descriptions. Production cleanup is disabled in this release candidate.
+All examples below are illustrative and use synthetic project descriptions. **This preview cannot perform cleanup on a user's project.**
 
 ## Python project
 
