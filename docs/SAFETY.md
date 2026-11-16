@@ -8,7 +8,7 @@
 - Tracked descendants, secret-like files, common databases/downloads/user-data directories, nested Git metadata, links/reparse points, and mount crossings block a whole candidate.
 - Git ignore status is never evidence of disposability. Unknown files are preserved or marked `REVIEW`.
 - Scan, plan, report, and restore preview do not install dependencies, write into the target project, or contact a network service.
-- Scan and restore traversal reject existing symlinked/reparse entries, do not cross filesystem-device boundaries, and stop at nested Git repositories. Manifest files must be regular non-link files inside the selected Git root.
+- Scan and restore traversal reject existing symlinked/reparse entries, do not cross filesystem-device boundaries, and stop at nested Git repositories. Manifest files must be regular non-link files inside the selected Git root. Device checks do not prove detection of same-device bind mounts.
 
 These path-based read-only walks are not an atomic filesystem snapshot and are not a race-resistant deletion design. Concurrent replacement during a walk can invalidate its observations; any output is advisory, and production apply remains disabled pending a separate descriptor/handle-based implementation and independent review.
 
@@ -18,7 +18,7 @@ Plans contain canonical root, root identity, Git snapshot, all classified review
 
 The CLI has no generic `--yes` switch. In a direct interactive terminal, apply displays the root, digest, and exact candidate list and requires `DELETE <digest>`. It records approval or decline in a local report. Even exact approval ends with `APPROVED_BUT_UNSUPPORTED`: production deletion refuses on all platforms. This is deliberate: portable path checks alone cannot close all Windows reparse-point and time-of-check/time-of-use races, and the PRD requires an owner-reviewed platform and human-approval design before real cleanup is enabled. Noninteractive apply records `APPROVAL_REQUIRED` and changes no project files.
 
-The test-only cleanup function is separate from the CLI and requires an exact temporary fixture directory bearing a harness marker. Tests create those directories programmatically and tear them down through their own temporary-directory owner.
+The test-only cleanup functions are separate from the CLI and require an exact registered temporary fixture directory bearing a harness marker. The POSIX descriptor-relative prototype lives in `secure_remove.py`; it is unwired and not suitable for real project cleanup. Tests create fixtures programmatically and tear them down through their temporary-directory owner. See [the prototype limitations](PRODUCTION_CLEANUP_DESIGN.md).
 
 ## Limitations
 
