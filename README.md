@@ -72,7 +72,7 @@ The canonical skill is [.agents/skills/hibernator/SKILL.md](.agents/skills/hiber
 
 Read [the safety model](docs/SAFETY.md) before using plans. A plan digest is an integrity check, not authentication. Agents must not impersonate a human approver. Real cleanup is disabled pending a platform security review. See the [independent review gate](docs/SECURITY_REVIEW_GATE.md) and [release gate matrix](docs/RELEASE_GATE_MATRIX.md). If cleanup is enabled in a later release, approval must be direct, interactive, and bound to the exact root and digest.
 
-Restore guidance only describes regenerating supported dependencies. It cannot recreate deleted personal data, private downloads, secrets, databases, or remote services. `restore --dry-run` never executes installers; package managers may use the network and run lifecycle scripts when a developer later chooses to run them.
+Restore guidance only describes regenerating supported dependencies. Monorepo grouping, nested projects, and ambiguity warnings are detailed in [restoration guidance](docs/RESTORE_GUIDANCE.md). It cannot recreate deleted personal data, private downloads, secrets, databases, or remote services. `restore --dry-run` never executes installers; package managers may use the network and run lifecycle scripts when a developer later chooses to run them.
 
 ## Development
 
