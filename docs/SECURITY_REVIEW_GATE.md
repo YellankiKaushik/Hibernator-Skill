@@ -25,7 +25,7 @@
 
 **Cross-platform:** ignored unknown files, nested Git/worktrees/submodules, tracked generated output, staged/unstaged work, secrets, SQLite, datasets, downloads, model weights, partial deletions, restoration-manifest integrity, and truthful free-space accounting.
 
-All destructive tests must use programmatically generated temporary Git fixtures. Include an outside sentinel and verify its identity/content before and after. Never use a real project as a deletion target. The current host denied real symlink/junction/hard-link creation; the mocked reparse tests are supplementary and do not close this gate.
+All destructive tests must use programmatically generated temporary Git fixtures. Include an outside sentinel and verify its identity/content before and after. Never use a real project as a deletion target. The local Windows host denied link creation; the full [C-07 Actions run](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43831231379) ran the POSIX symlink and hard-link fixture checks. Windows junction scenarios were skipped in CI, so they remain unverified. Device-crossing behavior was mocked; actual mount behavior, including same-device bind mounts, remains unverified. No independent review has occurred for the fixture-only POSIX prototype.
 
 ## Reviewer decision record
 
