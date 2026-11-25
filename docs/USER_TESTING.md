@@ -1,10 +1,26 @@
 # Hibernator hands-on preview test
 
-This guide uses a **new synthetic Git project under your operating system's temporary directory**. Do not substitute a real project. The current preview cannot delete real project files; the final exact-approval check below must report `APPROVED_BUT_UNSUPPORTED` and leave the synthetic project's files untouched.
+Start with a **new synthetic Git project** in your temporary directory. Use only the generated project for the approval and staleness exercises. After that, Windows users can follow [step 9](#9-scan-a-real-repository-from-windows-powershell) to scan, plan, and preview restoration on an existing repository.
 
 ## 1. Verify installation
 
-From the Hibernator checkout, run:
+On Windows, open PowerShell and run these commands from a folder where you keep tools. Install [Python 3.10 or later](https://www.python.org/downloads/windows/) and [Git for Windows](https://git-scm.com/download/win) first if either version check fails. If you already have a current checkout, skip the clone and change to that checkout instead.
+
+```powershell
+git --version
+py -3 --version
+git clone https://github.com/YellankiKaushik/Hibernator-Skill.git
+Set-Location Hibernator-Skill
+py -3 -m venv .venv
+& .\.venv\Scripts\python.exe -m pip install .
+if ($LASTEXITCODE -ne 0) { throw 'Hibernator installation failed.' }
+$hibernatorPython = (Resolve-Path .\.venv\Scripts\python.exe).Path
+function hibernator { & $hibernatorPython -m hibernator @args }
+```
+
+If you have `python` on PATH but no `py` launcher, use `python --version` and `python -m venv .venv`. The function above keeps the installed command available in the current PowerShell window without requiring virtual environment activation. The install may download a build dependency. The preview commands below work offline.
+
+On Linux or macOS, follow the [installation instructions](../README.md#installation) first. In the same terminal, verify the installed command:
 
 ```text
 hibernator doctor
@@ -26,19 +42,21 @@ $sample = Join-Path $sampleHome "project"
 $sentinel = Join-Path $sampleHome "outside-sentinel.txt"
 $planPath = Join-Path $sampleHome "plan.json"
 New-Item -ItemType Directory -Path "$sample\src", "$sample\node_modules\demo-package" -Force | Out-Null
-Set-Content -Encoding ascii -NoNewline "$sample\package.json" '{"name":"hibernator-uat-sample","private":true,"scripts":{"test":"node src/app.js"}}'
-Set-Content -Encoding ascii -NoNewline "$sample\package-lock.json" '{"name":"hibernator-uat-sample","lockfileVersion":3,"packages":{}}'
-Set-Content -Encoding ascii -NoNewline "$sample\src\app.js" 'console.log("synthetic source");'
-Set-Content -Encoding ascii -NoNewline "$sample\node_modules\demo-package\index.js" '// synthetic dependency'
-Set-Content -Encoding ascii -NoNewline "$sample\.env.local" 'TOKEN=synthetic-placeholder'
-Set-Content -Encoding ascii -NoNewline "$sample\local-notes.txt" 'synthetic untracked local note'
-Set-Content -Encoding ascii -NoNewline $sentinel 'outside sentinel must remain unchanged'
+[IO.File]::WriteAllText("$sample\package.json", '{"name":"hibernator-uat-sample","private":true,"scripts":{"test":"node src/app.js"}}')
+[IO.File]::WriteAllText("$sample\package-lock.json", '{"name":"hibernator-uat-sample","lockfileVersion":3,"packages":{}}')
+[IO.File]::WriteAllText("$sample\src\app.js", 'console.log("synthetic source");')
+[IO.File]::WriteAllText("$sample\node_modules\demo-package\index.js", '// synthetic dependency')
+[IO.File]::WriteAllText("$sample\.env.local", 'TOKEN=synthetic-placeholder')
+[IO.File]::WriteAllText("$sample\local-notes.txt", 'synthetic untracked local note')
+[IO.File]::WriteAllText($sentinel, 'outside sentinel must remain unchanged')
 git -C $sample init -q
 git -C $sample config user.name "Hibernator UAT"
 git -C $sample config user.email "hibernator-uat@example.invalid"
 git -C $sample add package.json package-lock.json src/app.js
 git -C $sample commit -qm "Create synthetic UAT project"
-Get-FileHash "$sample\src\app.js", "$sample\.env.local", "$sample\local-notes.txt", $sentinel
+Get-FileHash "$sample\src\app.js", "$sample\package.json", "$sample\package-lock.json",
+    "$sample\node_modules\demo-package\index.js", "$sample\.env.local", "$sample\local-notes.txt", $sentinel
+$sample
 git -C $sample status --short
 ```
 
@@ -91,7 +109,7 @@ Save the plan outside the project (in the temporary fixture's parent):
 ```powershell
 hibernator plan --project $sample --output $planPath --format json
 Get-Content $planPath
-Set-Content -Encoding ascii -NoNewline "$sample\node_modules\demo-package\added-after-plan.js" 'synthetic new file'
+[IO.File]::WriteAllText("$sample\node_modules\demo-package\added-after-plan.js", 'synthetic new file')
 hibernator apply --plan $planPath
 $LASTEXITCODE
 Test-Path "$sample\node_modules\demo-package\added-after-plan.js"
@@ -108,7 +126,7 @@ test -f "$sample/node_modules/demo-package/added-after-plan.js" && echo "synthet
 
 Inspect the complete candidate list, target root, and digest in the output and the saved JSON file. Candidate selection should include only paths supported by the report; do not assume every generated-looking file appears.
 
-Expected: apply rejects the stale plan (exit code `4`) and changes no files. The new synthetic file must still exist. Create a fresh plan before continuing.
+Expected: apply rejects the stale plan (exit code `4`) and changes no files. The new synthetic file must still exist. Create a fresh plan before continuing. The file added in this step is an intentional change. Run `git status --short` again and use that output as the baseline for the remaining preservation checks.
 
 ## 5. Check text and JSON output and saved reports
 
@@ -192,3 +210,69 @@ Other feedback:
 - [ ] Restore preview was useful and did not install anything.
 - [ ] Exact approval was refused for production cleanup and all fixture files remained intact.
 - [ ] I recorded confusing behavior, missing features, performance, and bugs above.
+
+## 9. Scan a real repository from Windows PowerShell
+
+Run this after the disposable exercise. Choose an existing local Git repository that you own and leave editors, watchers, and other Git commands idle during the comparison. Use only the three preview commands shown here. Keep all output private because plans contain the exact project root and reports can still show relative file names.
+
+Replace the example path with your own. Run these blocks in the PowerShell window where you installed the `hibernator` function. First resolve the repository root and prepare an evidence folder outside it:
+
+```powershell
+$projectPath = 'C:\work\My Project'
+$target = git --no-optional-locks -C $projectPath rev-parse --show-toplevel
+if ($LASTEXITCODE -ne 0) { throw 'Choose an existing Git working tree.' }
+$target = [IO.Path]::GetFullPath($target)
+$evidenceName = 'hibernator-uat-' + [guid]::NewGuid().ToString('N')
+$evidence = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA $evidenceName))
+$targetPrefix = $target.TrimEnd('\', '/') + '\'
+if ($evidence.Equals($target, [StringComparison]::OrdinalIgnoreCase) -or
+    $evidence.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Choose an evidence folder outside the repository.'
+}
+New-Item -ItemType Directory -Path $evidence -ErrorAction Stop | Out-Null
+
+function Get-HibernatorGitStatus {
+    $lines = git --no-optional-locks -C $target status --porcelain=v1 --untracked-files=all
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to read Git status.' }
+    return ($lines -join [Environment]::NewLine)
+}
+$before = Get-HibernatorGitStatus
+[IO.File]::WriteAllText((Join-Path $evidence 'git-before.txt'), [string]$before)
+```
+
+Next run the previews and save their JSON. The exit checks stop the walkthrough if a preview fails. A restore exit code of `3` means Hibernator could not offer supported restoration steps.
+
+```powershell
+hibernator scan --project $target --format json |
+    Out-File -FilePath (Join-Path $evidence 'scan.json') -Encoding UTF8
+if ($LASTEXITCODE -ne 0) { throw 'Review scan.json before continuing.' }
+
+$planPath = Join-Path $evidence 'plan.json'
+hibernator plan --project $target --output $planPath --format json |
+    Out-File -FilePath (Join-Path $evidence 'plan-output.json') -Encoding UTF8
+if ($LASTEXITCODE -ne 0) { throw 'Review plan-output.json before continuing.' }
+
+hibernator restore --project $target --dry-run --format json |
+    Out-File -FilePath (Join-Path $evidence 'restore.json') -Encoding UTF8
+$restoreExit = $LASTEXITCODE
+if ($restoreExit -ne 0 -and $restoreExit -ne 3) { throw 'Review restore.json.' }
+
+$after = Get-HibernatorGitStatus
+[IO.File]::WriteAllText((Join-Path $evidence 'git-after.txt'), [string]$after)
+if ($before -ceq $after) {
+    'Git status is identical before and after.'
+} else {
+    'Git status changed. Inspect both status files and check for concurrent activity.'
+}
+$evidence
+```
+
+An empty status file represents a clean working tree. Matching status shows that the reported tracked and untracked Git status stayed the same. It does not compare ignored file contents. The disposable fixture's hashes provide a separate content check for the files you selected.
+
+Open `scan.json`, `plan.json`, and `restore.json` from the printed folder:
+
+- `KEEP` means Hibernator classified the path for preservation. `REVIEW` means there is insufficient regeneration evidence or the path needs human interpretation. `BLOCKED` means a preservation or inspection rule prevented selection. `REGENERABLE` means a rule found sufficient evidence to propose the path as a candidate.
+- In `plan.json`, check `root`, `candidates`, `review_items`, `estimated_logical_bytes`, and `digest`. A plan can validly have zero candidates. Logical bytes describe the candidate contents. Production deletion is disabled.
+- In `restore.json`, read the suggested commands and warnings. Leave them as suggestions for this test. The dry run never invokes an installer.
+
+Record your observations in a private `feedback.txt` in the same folder. Before sharing feedback, review it and remove local paths, private file names, and project details.

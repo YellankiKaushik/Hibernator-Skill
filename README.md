@@ -164,7 +164,7 @@ hibernator plan --project "$HOME/work/my-project" --output "$HOME/hibernator-pla
 hibernator restore --project "$HOME/work/my-project" --dry-run
 ```
 
-Read each scan reason and the complete plan before continuing. `apply` revalidates the saved plan, but it always refuses actual cleanup in this version—even after an exact interactive digest is entered. For a safe hands-on walkthrough, use only the generated disposable fixture in [`docs/USER_TESTING.md`](docs/USER_TESTING.md).
+Read each scan reason and the complete plan before continuing. `apply` revalidates the saved plan, but it always refuses actual cleanup in this version—even after an exact interactive digest is entered. Follow the [hands-on testing guide](docs/USER_TESTING.md) for installation and a disposable fixture. It includes [Windows instructions for a read-only real-project preview](docs/USER_TESTING.md#9-scan-a-real-repository-from-windows-powershell).
 
 ### Inspecting output and reports
 
@@ -282,7 +282,7 @@ The Antigravity App, IDE, and CLI document `.agents/skills/` for workspace skill
 
 An agent that can run local commands may follow the same skill instructions or call `python -m hibernator` itself. It must have the Python package installed in the interpreter available to that terminal. An agent without local filesystem access can only explain the documentation; it cannot inspect files that are not provided to its runtime. Agents must not approve or perform real deletion.
 
-See [agent setup and verification](docs/AGENTS.md) for the installation matrix and verification history.
+Use the [copy-and-paste prompt](docs/AGENTS.md#copy-and-paste-prompt-for-any-terminal-capable-coding-agent) with any agent that can run local commands. See [agent setup and verification](docs/AGENTS.md) for installation and host verification.
 
 ## Security and privacy
 

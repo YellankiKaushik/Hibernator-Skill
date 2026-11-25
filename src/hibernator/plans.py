@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+import uuid
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
@@ -20,7 +23,7 @@ def make_plan(project: str | Path, excluded: list[str] | None = None) -> dict[st
         raise InvalidPlan("Exclusions must exactly match REGENERABLE paths: " + ", ".join(sorted(invalid_exclusions)))
     payload: dict[str, Any] = {
         "schema_version": PLAN_SCHEMA_VERSION,
-        "plan_id": digest({"root": report.root, "created_at": utc_now()})[:16],
+        "plan_id": uuid.uuid4().hex,
         "created_at": utc_now(),
         "state": "PLANNED",
         "root": report.root,
@@ -96,12 +99,16 @@ def save_plan(plan: dict[str, Any], path: Path) -> None:
         pass
     else:
         raise InvalidPlan("Plan files must be saved outside the scanned project.")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(canonical_json(plan) + b"\n")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=".hibernator-plan-", suffix=".tmp", dir=target.parent)
     try:
-        path.chmod(0o600)
-    except OSError:
-        pass
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(canonical_json(plan) + b"\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_name, target)
+    finally:
+        Path(temp_name).unlink(missing_ok=True)
 
 
 def load_plan(path: Path) -> dict[str, Any]:
@@ -116,7 +123,11 @@ def load_plan(path: Path) -> dict[str, Any]:
 def validate_current(plan: dict[str, Any]) -> None:
     validate_plan(plan)
     current = scan(plan["root"])
-    if current.root != plan["root"] or current.git_snapshot != plan["git_snapshot"]:
+    if (
+        current.root != plan["root"]
+        or current.git_snapshot != plan["git_snapshot"]
+        or current.tracked_snapshot != plan["tracked_snapshot"]
+    ):
         raise InvalidPlan("Project or Git state changed after planning; scan and create a new plan.")
     current_classification = digest({"items": [item.to_dict() for item in current.items], "total_logical_bytes": current.total_logical_bytes})
     if current_classification != plan["classification_snapshot"]:

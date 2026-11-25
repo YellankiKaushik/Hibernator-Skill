@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from hibernator.errors import InvalidPlan
 from hibernator.plans import load_plan, make_plan, plan_digest, save_plan, validate_current, validate_plan
@@ -49,6 +51,22 @@ class PlanTests(unittest.TestCase):
         with self.assertRaises(InvalidPlan):
             save_plan(make_plan(self.fixture.root), self.fixture.root / "plan.json")
 
+    def test_failed_save_preserves_existing_plan_and_removes_temporary_file(self):
+        original = make_plan(self.fixture.root)
+        replacement = make_plan(self.fixture.root, ["node_modules"])
+        with tempfile.TemporaryDirectory(prefix="hibernator-plan-test-") as tmp:
+            path = Path(tmp) / "plan.json"
+            save_plan(original, path)
+
+            with patch("hibernator.plans.os.replace", side_effect=OSError("simulated replace failure")):
+                with self.assertRaisesRegex(OSError, "simulated replace failure"):
+                    save_plan(replacement, path)
+
+            self.assertEqual(original, load_plan(path))
+            self.assertEqual([path], list(Path(tmp).iterdir()))
+            save_plan(replacement, path)
+            self.assertEqual(replacement, load_plan(path))
+
     def test_changed_candidate_invalidates_plan(self):
         plan = make_plan(self.fixture.root)
         file = self.fixture.root / "node_modules/pkg/index.js"
@@ -67,9 +85,25 @@ class PlanTests(unittest.TestCase):
         plan = make_plan(self.fixture.root)
         source = self.fixture.root / "src/app.js"
         source.write_text("staged source change\n", encoding="utf-8")
-        import subprocess
         subprocess.run(["git", "-C", str(self.fixture.root), "add", "src/app.js"], check=True)
         with self.assertRaises(InvalidPlan):
+            validate_current(plan)
+
+    def test_second_staged_edit_with_same_status_and_size_invalidates_plan(self):
+        git = ["git", "-C", str(self.fixture.root)]
+        stage_source = [*git, "add", "src/app.js"]
+        next_revision = b"export const app = 2;\n"
+        # Pre-store the second blob so staging it does not change the .git byte count.
+        subprocess.run([*git, "hash-object", "-w", "--stdin"], input=next_revision, stdout=subprocess.DEVNULL, check=True)
+        self.fixture.write("src/app.js", "export const app = 1;\n")
+        subprocess.run(stage_source, check=True)
+        plan = make_plan(self.fixture.root)
+        validate_current(plan)
+
+        self.fixture.write("src/app.js", next_revision)
+        subprocess.run(stage_source, check=True)
+
+        with self.assertRaisesRegex(InvalidPlan, "Git state changed"):
             validate_current(plan)
 
     def test_malformed_candidate_rejected(self):

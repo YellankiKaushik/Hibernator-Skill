@@ -44,6 +44,30 @@ An agent that can read Agent Skills and run local commands can follow `.agents/s
 
 Agents may inspect and prepare plans, but must not impersonate the user, type approval, or generate deletion commands. Production apply is disabled.
 
+## Copy-and-paste prompt for any terminal-capable coding agent
+
+Replace `<absolute project path>` and `<private output directory>` before pasting this into your agent.
+
+```text
+Use the installed Hibernator CLI to preview one local Git repository I own.
+The exact repository root is <absolute project path>. Store the plan at
+<private output directory>/hibernator-plan.json, outside the repository.
+
+Run hibernator doctor, then hibernator scan --project ROOT --format json,
+hibernator plan --project ROOT --output PLAN --format json, and
+hibernator restore --project ROOT --dry-run --format json. Substitute the
+paths above for ROOT and PLAN and quote paths as required by your shell.
+Use python -m hibernator if the installed console command is unavailable.
+Stop and tell me what is missing if you cannot access the terminal, CLI,
+repository, or separate output folder.
+
+Summarize the candidates, KEEP/REVIEW/BLOCKED decisions and their reasons,
+logical byte estimates, and restoration suggestions. Mention incomplete
+inspection or ambiguous evidence. Keep the raw output and absolute paths
+private. Do not run apply, type an approval phrase, install dependencies,
+change Git state, edit the project, or run any deletion command.
+```
+
 ## Verification record
 
 | Host or capability | Evidence | Status |

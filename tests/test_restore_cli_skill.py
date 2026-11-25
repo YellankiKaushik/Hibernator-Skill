@@ -13,7 +13,7 @@ import hibernator.restore as restore_module
 import hibernator.util as util
 from hibernator.cli import main
 from hibernator.cleaner import apply_test_fixture
-from hibernator.plans import make_plan
+from hibernator.plans import load_plan, make_plan
 from hibernator.restore import restore_preview
 from hibernator.reports import write_scan_report
 from tests.helpers import GitFixture, make_junction, node_fixture
@@ -191,6 +191,26 @@ class RestoreAndCliTests(unittest.TestCase):
             self.assertEqual(".", stored["git_root"])
             self.assertTrue(stored["root_redacted"])
             self.assertNotIn(str(self.fixture.root), stored_text)
+
+    def test_plans_created_in_the_same_second_have_distinct_default_files(self):
+        argv = ["plan", "--project", str(self.fixture.root), "--format", "json"]
+        with tempfile.TemporaryDirectory(prefix="hibernator-cli-test-") as tmp:
+            with patch("hibernator.cli.report_directory", return_value=Path(tmp)), patch(
+                "hibernator.plans.utc_now", return_value="2026-11-25T00:00:00+00:00"
+            ):
+                first_output = io.StringIO()
+                with redirect_stdout(first_output):
+                    self.assertEqual(0, main(argv))
+                second_output = io.StringIO()
+                with redirect_stdout(second_output):
+                    self.assertEqual(0, main([*argv, "--exclude", "node_modules"]))
+
+            first = json.loads(first_output.getvalue())
+            second = json.loads(second_output.getvalue())
+            self.assertNotEqual(first["saved_plan"], second["saved_plan"])
+            first_plan = load_plan(Path(first["saved_plan"]))
+            self.assertEqual(["node_modules"], [item["path"] for item in first_plan["candidates"]])
+            self.assertEqual([], load_plan(Path(second["saved_plan"]))["candidates"])
 
     def test_noninteractive_apply_returns_refusal_code(self):
         from hibernator.plans import save_plan
