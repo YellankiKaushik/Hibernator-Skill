@@ -8,14 +8,14 @@ import os
 import re
 import stat
 import uuid
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 from .errors import InvalidPlan, UnsupportedRoot
 from .paths import (
     directory_chain, external_filesystem, local_path, mounted_filesystems, open_observed, path_key,
     pin_windows_directory, real_directory, relative_path, same_open_file, stamp,
-    validate_windows_private_directory, windows_local_drive,
+    validate_windows_private_directory, windows_file_handle, windows_local_drive,
 )
 from .reports import _fsync_parent_directory, report_directory
 
@@ -229,17 +229,81 @@ def _create_store(store: Path, root: Path) -> tuple[int, ...]:
     return stamp(store.lstat())[:3]
 
 
+class ReportOperationError(OSError):
+    """Safe operation name with the original failure retained as its cause."""
+
+
+@contextmanager
+def _report_operation(operation: str):
+    try:
+        yield
+    except (OSError, InvalidPlan, UnsupportedRoot) as exc:
+        raise ReportOperationError(operation) from exc
+
+
+def _commit_windows_file(temporary: Path, destination: Path, data: bytes, guard) -> None:
+    import ctypes
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    write = kernel.WriteFile
+    write.argtypes = (wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
+                      ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p)
+    write.restype = wintypes.BOOL
+    flush = kernel.FlushFileBuffers
+    flush.argtypes = (wintypes.HANDLE,)
+    flush.restype = wintypes.BOOL
+    rename = kernel.SetFileInformationByHandle
+    rename.argtypes = (wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD)
+    rename.restype = wintypes.BOOL
+
+    name = str(destination).encode("utf-16-le")
+    # FILE_RENAME_INFO uses a DWORD-sized union and a trailing UTF-16 name.
+    class RenameInfo(ctypes.Structure):
+        _fields_ = [("replace_if_exists", wintypes.DWORD), ("root_directory", wintypes.HANDLE),
+                    ("name_length", wintypes.DWORD), ("name", ctypes.c_ubyte * (len(name) + 2))]
+
+    request = RenameInfo(name_length=len(name))
+    ctypes.memmove(ctypes.addressof(request) + RenameInfo.name.offset, name, len(name))
+    # Request GENERIC_WRITE and DELETE when creating the staging file. Reopening it
+    # for a path-based rename can require rights that the creation handle already has.
+    # CREATE_NEW refuses existing staging paths. Exclusive sharing protects the
+    # staged file until it is published and the handle closes.
+    with ExitStack() as stage:
+        with _report_operation(f"create staging file for {destination.name}"):
+            handle = stage.enter_context(windows_file_handle(
+                temporary, access=0x40000000 | 0x00010000, share=0,
+                disposition=1, flags=0x00200000 | 0x80,
+            ))
+        with _report_operation(f"write and flush {destination.name}"):
+            written = wintypes.DWORD()
+            if not write(handle, data, len(data), ctypes.byref(written), None):
+                raise ctypes.WinError(ctypes.get_last_error())
+            if written.value != len(data):
+                raise OSError("Short write to report staging file.")
+            if not flush(handle):
+                raise ctypes.WinError(ctypes.get_last_error())
+        guard()
+        with _report_operation(f"atomically rename {destination.name}"):
+            # FileRenameInfo (3), with ReplaceIfExists false, publishes only a new name.
+            if not rename(handle, 3, ctypes.byref(request), ctypes.sizeof(request)):
+                raise ctypes.WinError(ctypes.get_last_error())
+
+
 def _commit_file(directory: Path, name: str, data: bytes, guard, directory_fd: int | None) -> Path:
     guard()
     temporary_name = ".staging-" + uuid.uuid4().hex
     temporary = directory / temporary_name
+    path = directory / name
+    if os.name == "nt":
+        _commit_windows_file(temporary, path, data, guard)
+        return path
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0)
     fd = os.open(temporary if directory_fd is None else temporary_name, flags, 0o600, dir_fd=directory_fd)
     with os.fdopen(fd, "wb") as stream:
         stream.write(data)
         stream.flush()
         os.fsync(stream.fileno())
-    path = directory / name
     guard()
     if path.exists() or path.is_symlink():
         raise OSError("Unexpected report destination already exists.")
@@ -275,16 +339,20 @@ def _json(content: bytes) -> dict:
 def save_pair(body: dict, store: Path, root: Path, *, show_paths: bool) -> dict:
     body["digest"] = report_digest(body)
     validate_retirement_report(body)
-    store_stamp = _create_store(store, root)
+    with _report_operation("prepare private report storage"):
+        store_stamp = _create_store(store, root)
     run = store / ("retirement-" + body["report_id"])
     with ExitStack() as locks:
         for parent in reversed((store, *store.parents)):
             if parent != Path(store.anchor):
-                locks.enter_context(pin_windows_directory(parent))
+                with _report_operation("pin report storage directory or ancestor"):
+                    locks.enter_context(pin_windows_directory(parent))
         if stamp(real_directory(store))[:3] != store_stamp:
             raise OSError("Report storage changed before saving.")
-        run.mkdir(mode=0o700)
-        locks.enter_context(pin_windows_directory(run))
+        with _report_operation("create private report run directory"):
+            run.mkdir(mode=0o700)
+        with _report_operation("pin private report run directory"):
+            locks.enter_context(pin_windows_directory(run))
         run_stamp = stamp(real_directory(run))[:3]
         directory_fd = None
         if os.name == "posix":
@@ -298,9 +366,10 @@ def save_pair(body: dict, store: Path, root: Path, *, show_paths: bool) -> dict:
 def _publish_pair(body, store, root, run, store_stamp, run_stamp, directory_fd, show_paths) -> dict:
 
     def guard():
-        validate_store(root, str(store))
-        if stamp(real_directory(store))[:3] != store_stamp or stamp(real_directory(run))[:3] != run_stamp:
-            raise OSError("Report storage changed while saving.")
+        with _report_operation("recheck private report directory"):
+            validate_store(root, str(store))
+            if stamp(real_directory(store))[:3] != store_stamp or stamp(real_directory(run))[:3] != run_stamp:
+                raise OSError("Report storage changed while saving.")
 
     raw = _encode(body) + b"\n"
     markdown = render_retirement(body, show_paths=show_paths).encode("utf-8")
@@ -309,8 +378,9 @@ def _publish_pair(body, store, root, run, store_stamp, run_stamp, directory_fd, 
     json_path = _commit_file(run, "retirement.json", raw, guard, directory_fd)
     markdown_path = _commit_file(run, "retirement.md", markdown, guard, directory_fd)
     guard()
-    if _report_bytes(json_path) != raw or _report_bytes(markdown_path) != markdown:
-        raise OSError("Report pair did not match its generated contents.")
+    with _report_operation("verify written report files"):
+        if _report_bytes(json_path) != raw or _report_bytes(markdown_path) != markdown:
+            raise OSError("Report pair did not match its generated contents.")
     marker = {"schema_version": 1, "report_id": body["report_id"], "json_sha256": _sha(raw),
               "markdown_sha256": _sha(markdown)}
     _commit_file(run, "complete.json", _encode(marker) + b"\n", guard, directory_fd)

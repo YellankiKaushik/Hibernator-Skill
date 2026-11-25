@@ -15,7 +15,9 @@ from .errors import InvalidPlan, ScanFailure, UnsupportedRoot
 from .git_state import GitReader
 from .inventory import collect_inventory
 from .paths import canonical_root, directory_chain, local_mounts, path_key, relative_path, stamp
-from .retirement_reports import FOOTER, SCHEMA_VERSION, load_retirement_report, new_report_id, save_pair, validate_store
+from .retirement_reports import (
+    FOOTER, SCHEMA_VERSION, ReportOperationError, load_retirement_report, new_report_id, save_pair, validate_store,
+)
 from .util import is_reparse_point
 
 
@@ -32,8 +34,20 @@ WARNINGS = [
 
 
 class PairWriteError(OSError):
-    def __init__(self, report_id: str):
-        super().__init__("Could not commit a verified report pair in the private output directory.")
+    def __init__(self, report_id: str, error: Exception):
+        operation = str(error) if isinstance(error, ReportOperationError) else "save the private report pair"
+        while error.__cause__ is not None:
+            error = error.__cause__
+        error_type = type(error).__name__
+        self.diagnostic = {"operation": operation, "exception": error_type}
+        error_codes = []
+        for field, label in (("winerror", "WinError"), ("errno", "errno")):
+            number = getattr(error, field, None)
+            if isinstance(number, int):
+                self.diagnostic[field] = number
+                error_codes.append(f"{label} {number}")
+        detail = f" ({', '.join(error_codes)})" if error_codes else ""
+        super().__init__(f"Could not {operation}. {error_type}{detail}.")
         self.report_id = report_id
 
 
@@ -120,7 +134,7 @@ def retire(project: str, *, output: str | None, deep: bool, minimum: str, exclud
     try:
         reports = save_pair(body, store, root, show_paths=show_paths)
     except (OSError, UnsupportedRoot, InvalidPlan) as exc:
-        raise PairWriteError(body["report_id"]) from exc
+        raise PairWriteError(body["report_id"], exc) from exc
     metrics = {**inventory.metrics, "phase_seconds": {**inventory.metrics["phase_seconds"],
                "private report writing": round(time.monotonic() - writing, 6)}}
     summary = {

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import errno
 import io
 import json
 import os
@@ -14,6 +16,7 @@ from unittest.mock import patch
 from hibernator import inventory, retirement_reports
 from hibernator.cli import main
 from hibernator.errors import InvalidPlan
+from hibernator.paths import pin_windows_directory
 from hibernator.plans import make_plan, validate_current
 from hibernator.retirement import retire
 from tests.helpers import node_fixture
@@ -183,6 +186,74 @@ class RetirementTests(unittest.TestCase):
         self.assertEqual(2, self.invoke("--exclude", "NODE_MODULES")[0])
         self.assertEqual(2, self.invoke("--exclude", "node_modules", "--exclude", "NODE_MODULES")[0])
 
+    @unittest.skipUnless(os.name == "nt", "Windows inherited file permissions")
+    def test_windows_report_pair_publishes_without_reopening_staging_files(self):
+        identity = subprocess.check_output(["whoami", "/user", "/fo", "csv", "/nh"], encoding="oem")
+        sid = next(csv.reader(identity.splitlines()))[1]
+        original = retirement_reports._publish_pair
+        before = self.snapshot()
+
+        def publish_with_restricted_staging(body, store, root, run, *args, **kwargs):
+            def acl(*arguments):
+                subprocess.run(["icacls", str(run), *arguments], check=True, capture_output=True)
+
+            staging = run / "preflight-staging"
+            try:
+                # Let the writer create and flush a file. Deny DELETE when that
+                # file is reopened and deny FILE_DELETE_CHILD on its directory.
+                acl("/grant", f"*{sid}:(OI)(IO)(RX,W)")
+                acl("/deny", f"*{sid}:(OI)(IO)(DE)")
+                acl("/deny", f"*{sid}:(DC)")
+                with staging.open("xb") as stream:
+                    stream.write(b"synthetic preflight")
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                with self.assertRaises(PermissionError) as denied:
+                    os.replace(staging, run / "preflight-destination")
+                self.assertEqual(5, denied.exception.winerror)
+                paths = original(body, store, root, run, *args, **kwargs)
+                validated = retirement_reports.load_retirement_report(store / paths["json"])
+                self.assertEqual(body["report_id"], validated["report_id"])
+                return paths
+            finally:
+                acl("/remove:d", f"*{sid}")
+                staging.unlink(missing_ok=True)
+
+        with patch.object(retirement_reports, "_publish_pair", publish_with_restricted_staging):
+            code, summary, _ = self.invoke()
+        self.assertEqual(0, code, summary)
+        run = (self.output / summary["reports"]["json"]).parent
+        self.assertEqual({"retirement.json", "retirement.md", "complete.json"},
+                         {path.name for path in run.iterdir()})
+        self.assertEqual(before, self.snapshot())
+        self.assertEqual(b"private outside fixture", self.sentinel.read_bytes())
+
+    @unittest.skipUnless(os.name == "nt", "Windows directory handle sharing")
+    def test_windows_directory_pin_blocks_rename_until_released(self):
+        directory = self.output / "original"
+        moved = self.output / "moved"
+        directory.mkdir()
+        with pin_windows_directory(directory):
+            with self.assertRaises(PermissionError):
+                directory.rename(moved)
+        directory.rename(moved)
+        self.assertTrue(moved.is_dir())
+
+    @unittest.skipUnless(os.name == "nt", "Windows atomic rename")
+    def test_windows_report_rename_refuses_destination_created_during_write(self):
+        destination = self.output / "retirement.json"
+        original = b"outside fixture sentinel"
+
+        def create_destination_during_write():
+            if any(self.output.glob(".staging-*")) and not destination.exists():
+                destination.write_bytes(original)
+
+        with self.assertRaisesRegex(retirement_reports.ReportOperationError, "atomically rename retirement.json") as failure:
+            retirement_reports._commit_file(self.output, destination.name, b"replacement",
+                                            create_destination_during_write, None)
+        self.assertIsInstance(failure.exception.__cause__, FileExistsError)
+        self.assertEqual(original, destination.read_bytes())
+
     def test_private_reader_rejects_corrupt_pair_wrong_schema_and_overlap(self):
         _, summary, _ = self.invoke()
         paths, report = self.read_pair(summary)
@@ -214,13 +285,18 @@ class RetirementTests(unittest.TestCase):
 
         def disk_full(directory, name, *args):
             if name == "retirement.md":
-                raise OSError("simulated disk full")
+                raise OSError(errno.ENOSPC, "simulated disk full", str(self.output))
             return commit(directory, name, *args)
 
         with patch.object(retirement_reports, "_commit_file", side_effect=disk_full):
             code, partial, _ = self.invoke()
         self.assertEqual(8, code)
         self.assertEqual("INCOMPLETE", partial["status"])
+        self.assertEqual("REPORT_PAIR_WRITE_FAILED", partial["code"])
+        self.assertEqual("OSError", partial["cause"]["exception"])
+        self.assertEqual(errno.ENOSPC, partial["cause"]["errno"])
+        self.assertNotIn(str(self.output), partial["message"])
+        self.assertNotIn(str(self.output), partial["cause"]["operation"])
         self.assertNotIn("reports", partial)
         run = self.output / ("retirement-" + partial["report_id"])
         self.assertTrue((run / "retirement.json").is_file())

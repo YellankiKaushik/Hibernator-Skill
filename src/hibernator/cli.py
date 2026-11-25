@@ -247,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
     except PairWriteError as exc:
         if output_format == "json":
             _print_json({"status": "INCOMPLETE", "code": "REPORT_PAIR_WRITE_FAILED", "report_id": exc.report_id,
-                         "message": str(exc)})
+                         "message": str(exc), "cause": exc.diagnostic})
         else:
             print(str(exc), file=sys.stderr)
         return EXIT["internal"]

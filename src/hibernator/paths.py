@@ -184,11 +184,7 @@ def validate_windows_private_directory(path: Path) -> None:
 
 
 @contextmanager
-def pin_windows_directory(path: Path):
-    """Hold a directory handle without FILE_SHARE_DELETE during report publication."""
-    if os.name != "nt":
-        yield
-        return
+def windows_file_handle(path: Path, access: int, share: int, disposition: int, flags: int):
     import ctypes
     from ctypes import wintypes
 
@@ -200,14 +196,26 @@ def pin_windows_directory(path: Path):
     close = kernel.CloseHandle
     close.argtypes = (wintypes.HANDLE,)
     close.restype = wintypes.BOOL
-    handle = create(str(path), 0x80, 0x3, None, 3, 0x02200000, None)
+    handle = create(str(path), access, share, None, disposition, flags, None)
     if handle == ctypes.c_void_p(-1).value:
         raise ctypes.WinError(ctypes.get_last_error())
     try:
-        real_directory(path)
-        yield
+        yield handle
     finally:
         close(handle)
+
+
+@contextmanager
+def pin_windows_directory(path: Path):
+    """Hold a directory handle without FILE_SHARE_DELETE during report publication."""
+    if os.name != "nt":
+        yield
+        return
+    # FILE_TRAVERSE participates in share checks. FILE_READ_ATTRIBUTES alone does not.
+    # Share read/write, open the existing directory, and refuse to follow a reparse point.
+    with windows_file_handle(path, access=0x20, share=0x3, disposition=3, flags=0x02200000):
+        real_directory(path)
+        yield
 
 
 def path_key(path: str) -> str:
