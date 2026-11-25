@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import tempfile
 import uuid
 from pathlib import Path, PureWindowsPath
@@ -9,12 +10,17 @@ from typing import Any
 
 from . import PLAN_SCHEMA_VERSION, RULE_PACK_VERSION
 from .discovery import scan
-from .errors import InvalidPlan
+from .errors import InvalidPlan, UnsupportedRoot
+from .models import ScanReport
+from .paths import external_directory, local_path
 from .util import canonical_json, digest, utc_now
 
 
 def make_plan(project: str | Path, excluded: list[str] | None = None) -> dict[str, Any]:
-    report = scan(project)
+    return plan_from_scan(scan(project), excluded)
+
+
+def plan_from_scan(report: ScanReport, excluded: list[str] | None = None) -> dict[str, Any]:
     exclude = set(excluded or [])
     candidates = [item.to_dict() for item in report.items if item.decision == "REGENERABLE" and item.path not in exclude]
     review_items = [item.to_dict() for item in report.items if item.decision != "REGENERABLE"]
@@ -91,7 +97,7 @@ def validate_plan(plan: dict[str, Any]) -> None:
 
 def save_plan(plan: dict[str, Any], path: Path) -> None:
     validate_plan(plan)
-    target = path.resolve(strict=False)
+    target = local_path(path)
     project_root = Path(plan["root"]).resolve(strict=True)
     try:
         target.relative_to(project_root)
@@ -99,7 +105,15 @@ def save_plan(plan: dict[str, Any], path: Path) -> None:
         pass
     else:
         raise InvalidPlan("Plan files must be saved outside the scanned project.")
-    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        external_directory(target.parent, project_root)
+        if target.exists() or target.is_symlink():
+            info = target.lstat()
+            from .util import is_reparse_point
+            if not stat.S_ISREG(info.st_mode) or is_reparse_point(info) or info.st_nlink != 1:
+                raise InvalidPlan("The plan destination is linked or unsupported.")
+    except UnsupportedRoot as exc:
+        raise InvalidPlan("The plan must use an unaliased local destination outside the project.") from exc
     fd, temp_name = tempfile.mkstemp(prefix=".hibernator-plan-", suffix=".tmp", dir=target.parent)
     try:
         with os.fdopen(fd, "wb") as stream:

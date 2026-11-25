@@ -1,5 +1,7 @@
 # Independent filesystem security review gate
 
+> This historical review gate describes the retired deletion prototype. It does not authorize or anticipate production deletion. Read-only retirement is covered by the current safety model.
+
 **Scope:** Production cleanup. This checklist is a review protocol, not evidence that Hibernator is safe. Production `apply` remains disabled until an independent reviewer approves an exact implementation revision for named platforms and filesystems.
 
 ## Required review evidence

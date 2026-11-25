@@ -11,10 +11,10 @@ import stat
 import tempfile
 from pathlib import Path, PurePosixPath
 
-from .discovery import canonical_root
-from .errors import ApplyRefused, InvalidPlan
-from .git_state import read_git_state
-from .plans import validate_current, validate_plan
+from hibernator.discovery import canonical_root
+from hibernator.errors import ApplyRefused, InvalidPlan
+from hibernator.git_state import read_git_state
+from hibernator.plans import validate_current, validate_plan
 
 
 class UnsupportedDeletionPlatform(ApplyRefused):
@@ -97,7 +97,7 @@ def remove_test_fixture_candidate(plan: dict, relative_path: str) -> None:
     if not all(function in os.supports_dir_fd for function in required_dir_fd) or os.listdir not in os.supports_fd:
         raise UnsupportedDeletionPlatform("Required directory-relative filesystem operations are unavailable.")
 
-    from .cleaner import _TEST_OWNED_ROOTS  # Imported lazily to avoid a module cycle.
+    from hibernator.cleaner import _TEST_OWNED_ROOTS  # Imported lazily to avoid a module cycle.
 
     validate_plan(plan)
     matches = [candidate for candidate in plan["candidates"] if candidate["path"] == relative_path]

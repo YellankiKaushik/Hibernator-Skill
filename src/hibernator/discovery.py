@@ -11,11 +11,11 @@ from urllib.request import url2pathname
 from .errors import ScanFailure, UnsupportedRoot
 from .git_state import GitState, read_git_state
 from .models import Item, ScanReport
-from .rules import rule_for, technology_markers
-from .util import identity, is_directory_nofollow, is_reparse_point, is_regular_nofollow, logical_size, tree_fingerprint, utc_now
+from .paths import canonical_root as _canonical_root, directory_chain, local_path, open_observed
+from .rules import protected_secret, rule_for, technology_markers
+from .util import identity, is_directory_nofollow, is_reparse_point, is_regular_nofollow, tree_fingerprint, utc_now
 
 
-SECRET_NAMES = {".env", ".env.local", ".env.development", ".env.production", "id_rsa", "id_ed25519", "credentials.json"}
 DATA_SUFFIXES = {".sqlite", ".sqlite3", ".db", ".dump", ".bak", ".onnx", ".pt", ".pth", ".safetensors", ".bin", ".parquet", ".csv", ".zip", ".tar", ".gz"}
 USER_DIR_NAMES = {"uploads", "datasets", "dataset", "models", "model", "data", "checkpoints", "weights"}
 SOURCE_DIRS = {"src", "source", "app", "tests", "test", "docs", "scripts"}
@@ -23,30 +23,14 @@ SKIP_SCAN = {".git", ".hg", ".svn"}
 
 
 def canonical_root(value: str | os.PathLike[str]) -> Path:
-    supplied = Path(value).expanduser()
-    try:
-        supplied_info = supplied.lstat()
-        if stat.S_ISLNK(supplied_info.st_mode) or is_reparse_point(supplied_info):
-            raise UnsupportedRoot("Project root cannot be a symlink or reparse point.")
-        root = supplied.resolve(strict=True)
-    except OSError as exc:
-        raise UnsupportedRoot("Project root does not exist or cannot be resolved.") from exc
-    if not root.is_dir() or root.is_symlink():
-        raise UnsupportedRoot("Project root must be an existing real directory, not a link.")
-    if root.parent == root:
-        raise UnsupportedRoot("Filesystem root cannot be used as a project.")
-    try:
-        if root == Path.home().resolve(strict=True):
-            raise UnsupportedRoot("The user home directory cannot be used as a project root.")
-    except OSError:
-        pass
+    root = _canonical_root(value)
+    if is_reparse_point(root.lstat()):
+        raise UnsupportedRoot("Project root is a reparse point.")
     return root
 
 
 def _tracked_under(path: Path, root: Path, git: GitState) -> bool:
-    rel = path.relative_to(root).as_posix().rstrip("/")
-    prefix = rel + "/"
-    return any(item == rel or item.startswith(prefix) for item in git.tracked)
+    return git.protects(path.relative_to(root).as_posix())
 
 
 def _same_device(path: Path, device: int) -> bool:
@@ -63,7 +47,7 @@ def _verified_editable_pth(path: Path, candidate: Path, root: Path) -> bool:
     if "site-packages" not in {part.lower() for part in path.parts}:
         return False
     try:
-        lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        lines = [line.strip() for line in _small_metadata(path).splitlines() if line.strip()]
     except (OSError, UnicodeError):
         return False
     if len(lines) != 1:
@@ -85,17 +69,18 @@ def _verified_editable_pth(path: Path, candidate: Path, root: Path) -> bool:
         if not is_regular_nofollow(direct_url):
             continue
         try:
-            value = json.loads(direct_url.read_text(encoding="utf-8"))
+            value = json.loads(_small_metadata(direct_url))
             parsed = urlparse(value.get("url", ""))
             if parsed.scheme != "file" or parsed.netloc not in {"", "localhost"}:
                 continue
             if value.get("dir_info", {}).get("editable") is not True:
                 continue
-            source = Path(url2pathname(parsed.path)).resolve(strict=True)
+            source = local_path(url2pathname(parsed.path))
             try:
                 source.relative_to(root)
             except ValueError:
                 continue
+            directory_chain(source)
             try:
                 source.relative_to(candidate)
             except ValueError:
@@ -105,9 +90,20 @@ def _verified_editable_pth(path: Path, candidate: Path, root: Path) -> bool:
             # The editable source itself is under the venv candidate; deleting
             # the environment would remove the source too, so do not exempt it.
             continue
-        except (OSError, UnicodeError, json.JSONDecodeError, AttributeError, TypeError):
+        except (OSError, ValueError, RecursionError, AttributeError, TypeError, UnsupportedRoot):
             continue
     return False
+
+
+def _small_metadata(path: Path) -> str:
+    info = path.lstat()
+    if info.st_size > 64 << 10:
+        raise OSError("Editable installation metadata is too large.")
+    with open_observed(path, info) as stream:
+        content = stream.read((64 << 10) + 1)
+        if len(content) != info.st_size:
+            raise OSError("Editable installation metadata changed.")
+    return content.decode("utf-8")
 
 
 def _danger_reason(path: Path, candidate: Path, root: Path) -> str | None:
@@ -137,7 +133,7 @@ def _danger_reason(path: Path, candidate: Path, root: Path) -> str | None:
                     if child.name == ".git":
                         return f"Contains a nested Git boundary ({child.relative_to(root).as_posix()})."
                     lower = child.name.lower()
-                    if lower in SECRET_NAMES or lower.startswith(".env."):
+                    if protected_secret(lower):
                         return f"Contains a secret-like file ({child.relative_to(root).as_posix()})."
                     if lower in USER_DIR_NAMES:
                         return f"Contains a user-data directory ({child.relative_to(root).as_posix()})."
@@ -172,70 +168,46 @@ def _danger_reason(path: Path, candidate: Path, root: Path) -> str | None:
     return None
 
 
-def _walk_dirs(root: Path):
-    def fail_on_walk_error(error):
-        raise error
-
-    root_device = int(root.lstat().st_dev)
-    for current, dirs, _files in os.walk(root, topdown=True, onerror=fail_on_walk_error, followlinks=False):
-        base = Path(current)
-        if base != root and (base / ".git").exists():
-            dirs[:] = []
-            continue
-        descend: list[str] = []
-        for name in list(dirs):
-            child = base / name
-            if name in SKIP_SCAN:
-                continue
-            try:
-                info = child.lstat()
-            except OSError:
-                continue
-            if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode) or is_reparse_point(info):
-                continue
-            # Yield mount roots so a same-named candidate can be reported as
-            # blocked, but never enumerate their contents.
-            yield child
-            if _same_device(child, root_device):
-                descend.append(name)
-        dirs[:] = descend
-
-
 def scan(project: str | os.PathLike[str]) -> ScanReport:
+    from .inventory import legacy_tree_metadata
+
     root = canonical_root(project)
     git = read_git_state(root)
     try:
         root_identity = identity(root)
-        root_device = int(root.lstat().st_dev)
-        total = logical_size(root, boundary_device=root_device)
-        tech = technology_markers(root)
+        sizes, directories, markers = legacy_tree_metadata(root, reparse=is_reparse_point, same_device=_same_device)
+        total = sizes[root]
+        tech = technology_markers(root, observed=markers)
     except OSError as exc:
         raise ScanFailure(f"Unable to inspect project completely: {exc}") from exc
 
     items: list[Item] = []
     candidate_roots: list[Path] = []
+    protected_roots: list[Path] = []
     candidates = []
-    for path in _walk_dirs(root):
+    for path in directories:
         rule, missing = rule_for(path, root)
         if rule:
             candidates.append((path, rule))
         elif missing:
             rel = path.relative_to(root).as_posix()
-            items.append(Item(rel, "unknown", "REVIEW", logical_size(path, boundary_device=root_device), missing, restore_hint="No verified recreation procedure."))
+            items.append(Item(rel, "unknown", "REVIEW", sizes.get(path, 0), missing, restore_hint="No verified recreation procedure."))
 
     for path, rule in sorted(candidates, key=lambda pair: (len(pair[0].parts), str(pair[0]))):
         if any(parent == path or parent in path.parents for parent in candidate_roots):
             continue
         rel = path.relative_to(root).as_posix()
         why = None
-        if _tracked_under(path, root, git):
+        if any(parent in path.parents for parent in protected_roots):
+            why = "A containing artifact is protected."
+        elif _tracked_under(path, root, git):
             why = "Contains Git-tracked content; tracked artifacts are always preserved."
         elif any((path / marker).exists() for marker in (".git",)):
             why = "Contains a nested Git boundary."
         else:
             why = _danger_reason(path, path, root)
         try:
-            size = logical_size(path, boundary_device=root_device)
+            size = sizes.get(path, 0)
             item_id = identity(path)
             tree_hash = tree_fingerprint(path) if not why else None
         except OSError:
@@ -243,6 +215,7 @@ def scan(project: str | os.PathLike[str]) -> ScanReport:
             why = "Unable to inspect candidate completely; preserving it."
         decision = "KEEP" if why and "tracked" in why.lower() else ("BLOCKED" if why else "REGENERABLE")
         if why:
+            protected_roots.append(path)
             items.append(Item(rel, rule["kind"], decision, size, why, rule["id"], rule["restore"], identity=item_id, tree_digest=tree_hash))
         else:
             candidate_roots.append(path)
@@ -255,11 +228,8 @@ def scan(project: str | os.PathLike[str]) -> ScanReport:
         if any(item.path == child.name for item in items):
             continue
         low = child.name.lower()
-        try:
-            size = logical_size(child, boundary_device=root_device)
-        except OSError:
-            size = 0
-        if low in SECRET_NAMES or low.startswith(".env."):
+        size = sizes.get(child, 0)
+        if protected_secret(low):
             items.append(Item(child.name, "local-data", "KEEP", size, "Secret-like content is protected."))
         elif low in USER_DIR_NAMES or child.suffix.lower() in DATA_SUFFIXES:
             items.append(Item(child.name, "download" if child.suffix.lower() in DATA_SUFFIXES else "local-data", "REVIEW", size, "Local data or download has no verified recovery source."))

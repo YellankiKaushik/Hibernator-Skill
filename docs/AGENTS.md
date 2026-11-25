@@ -49,28 +49,7 @@ The CLI works independently of Skill discovery. Install it in the agent's local 
 
 ## Copy-and-paste prompt for any terminal-capable coding agent
 
-```text
-Help me preview one inactive Git project with Hibernator.
-
-Ask for or confirm the exact local Git repository root and an existing private
-output folder outside that repository. If Hibernator is missing, help me install
-the CLI from its trusted source in a separate environment. Confirm Git and local
-terminal access. Run Hibernator's doctor check before inspecting the project.
-
-Record Git status before the preview. Run a read-only scan, then explain KEEP,
-REGENERABLE, REVIEW, and BLOCKED in plain English with the reasons and any
-ambiguous or incomplete results. Keep source code, sensitive files, and local
-changes intact. Do not open or reveal secret values.
-
-Create a reviewable plan outside the repository. Summarize its candidates,
-protected and review items, and estimated logical bytes as file sizes. Show
-restoration guidance using dry-run only. Compare Git status afterward and
-report what preservation checks established. Keep raw output, paths, and notes
-private, and report errors, skipped checks, and limitations honestly.
-
-Never run production apply, approve deletion, run an installer in the project,
-or use shell, Git, or other commands as a substitute for deletion.
-```
+Use the [universal prompt in the README](../README.md#copy-paste-prompt). Normal operation is one local command, `python -m hibernator retire --project "<root>" --format json`. The agent summarizes the private report and stops. Installation is a separate owner step. A cloud-only session needs the owner to run the command in their local terminal. A separate request can invoke read-only `verify`.
 
 ## Troubleshooting
 

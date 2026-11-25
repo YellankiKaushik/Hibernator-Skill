@@ -2,7 +2,15 @@
 
 Changes for each unreleased version are recorded here. No GitHub Release, tag, or PyPI publication has been created.
 
-## Unreleased — 0.1.0
+## Unreleased - 0.2.0
+
+- Added one-pass read-only retirement with private Markdown and JSON reports, exact filters, and optional separate read-only verification.
+- Added metadata-only fast observation and eligible-content deep mode. Legacy schema-2 plans retain content fingerprinting and stale checks.
+- Hardened Git and report boundaries and added npm, pinned Python and cache evidence checks.
+- Made production apply a prompt-free refusal and moved approval and removal prototypes into synthetic tests outside the installed package.
+- Updated the Agent Skill to run retirement once and stop. Kept the earlier demo and MIT license.
+
+## 0.1.0 preview history
 
 - Consolidated C-01 through C-08 development into the existing implementation, preserving its commit history.
 - Fixed nested cache matching and added realistic Node dependency-tree and Python editable-install classification coverage. Node package `data/` and unknown contents remain protected or for review unless safe regeneration is established.

@@ -1,5 +1,7 @@
 # Release gate matrix
 
+> This matrix records the earlier preview. The current owner-only boundary is permanent. See the [retirement verification record](RETIREMENT_VALIDATION.md) for this revision and its publication status.
+
 The consolidated implementation commit `b43430893d890183498a85c49c85d47bc642a998` passed [GitHub Actions run #13](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43848601766) (2026-11-16): **18/18 jobs passed**—15 Windows/Ubuntu/macOS × Python 3.10–3.14 unit/package jobs plus 3 OS adversarial fixture jobs. Every unit job ran 78 tests; each adversarial job ran 47. Linux/macOS unit jobs each skipped four Windows-junction cases; Windows unit jobs each skipped four junction cases plus the POSIX-only directory-fsync case. All three adversarial jobs skipped three Windows-junction cases. These remain unverified, not passes. Wheel builds, fresh environment installs, installed CLI checks, and packaged Agent Skill verification completed in the matrix. The subsequent documentation/branch-state commit `9797f70e90569b5fc6ac28ae9b6f4559318416a5` passed [run #14](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43849418766), also **18/18 jobs passed**.
 
 | ID | Gate | Current evidence | Status | Requirement to close |

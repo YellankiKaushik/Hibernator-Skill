@@ -51,3 +51,22 @@ class ScanReport:
             "items": [item.to_dict() for item in self.items],
             "errors": self.errors,
         }
+
+
+@dataclass
+class RetirementItem:
+    path: str | None
+    display_path: str
+    decision: str
+    logical_bytes: int | None
+    reason: str
+    rule_id: str | None = None
+    evidence: list[str] = field(default_factory=list)
+    checks: list[str] = field(default_factory=list)
+    recovery: dict | None = None
+    observation: dict | None = None
+    limitations: list[str] = field(default_factory=list)
+    disposition: str = "preserved"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)

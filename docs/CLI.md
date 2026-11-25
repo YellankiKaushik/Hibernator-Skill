@@ -1,38 +1,49 @@
 # CLI reference
 
-Hibernator targets one existing Git repository root. Scan, plan, and restore preview are read-only with respect to that project. Reports are stored in the user's local application state directory, outside the project. Exported scan/cleanup reports redact the absolute project root; `scan` and `restore` also redact it in output by default. Use `--show-paths` only when displaying local output that should contain the absolute path. Plan files include the exact root so the owner can review the bound target before approval.
+Use the installed `hibernator` command or the corresponding `python -m hibernator` invocation. Project commands accept one explicit local Git working-tree root.
 
 ## Commands
 
 ```text
+hibernator retire --project PATH [--output DIRECTORY] [--deep] [--min-size-mib N] [--exclude RELATIVE_PATH ...] [--show-paths] [--format text|json]
+hibernator verify --report FILE [--format text|json]
+hibernator report --retirement-file FILE [--format text|json]
 hibernator scan --project PATH [--save-report] [--show-paths] [--format text|json]
-hibernator plan --project PATH [--exclude RELATIVE_PATH ...] [--output PATH] [--format text|json]
+hibernator plan --project PATH [--output FILE] [--exclude RELATIVE_PATH ...] [--format text|json]
 hibernator apply --plan PATH [--format text|json]
-hibernator report (--id 32_HEX_ID | --file PATH) [--format text|json]
+hibernator report (--id ID | --file FILE) [--format text|json]
 hibernator restore --project PATH --dry-run [--show-paths] [--format text|json]
 hibernator doctor [--format text|json]
 hibernator rules list [--format text|json]
 ```
 
-Restore scans manifests in nested projects, associates Node projects with the nearest ancestor lockfile, and warns about ambiguous lockfiles or unverified managers. It groups packages that share a lockfile and shows per-project working-directory hints; it never invokes installers. See [restoration guidance](RESTORE_GUIDANCE.md) for monorepo behavior and limitations.
+## Retirement and private reports
 
-The same commands work through `python -m hibernator`. Text is the default. JSON is versioned for saved reports (`schema_version: "1"`); saved plan files use plan schema `2`. Scan items carry relative paths, a decision, category, logical byte estimate, reason, matching rule where applicable, and restoration hint. Cleanup reports separate calculated candidate bytes, logical bytes removed, remaining project logical bytes, and observed volume free-space delta. The volume delta is advisory and may include unrelated activity or filesystem behavior.
+- A relative project path is resolved from the caller's current directory. Use an existing private `--output` directory outside the project and its ancestors. The default is `%LOCALAPPDATA%\hibernator\reports\retirement` on Windows or `${XDG_STATE_HOME:-$HOME/.local/state}/hibernator/reports/retirement` on Linux and macOS.
+- The output lists report paths relative to the report store. `--show-paths` exposes absolute paths for local use. Every run has a unique directory.
+- `--exclude` accepts exact normalized candidate paths separated by forward slashes. Repeat the option for additional paths. Globs, traversal, aliases and unknown exclusions are rejected.
+- One MiB is 1,048,576 bytes. The minimum is converted to the smallest whole-byte threshold satisfying the given decimal. Excluded and below-minimum artifacts remain recorded as preserved and do not contribute to offered bytes.
+- Fast mode observes metadata and reads bounded recovery evidence. Deep mode also hashes eligible file contents. Both modes describe uncertainty. JSON stdout carries one summary object and the largest eight paths. Stages and throttled progress go to stderr.
 
-## Apply and approval status
+### Report schema 1
 
-Noninteractive apply refuses and saves an `APPROVAL_REQUIRED` report (exit 5). In a direct interactive terminal, Hibernator shows the exact root, digest, candidate list, protected/blocked/review items, estimate, and recovery warning, then requests `DELETE <full-plan-digest>`. A mismatch saves `DECLINED` (exit 5). Exact approval saves `APPROVED_BUT_UNSUPPORTED` (exit 3): **it still performs no deletion** because production apply is disabled pending independent filesystem security review. Reports may be loaded with `report --id ID` or `report --file PATH`.
+A retirement run holds `retirement.json`, `retirement.md` and `complete.json`. JSON contains the report type, version, run ID, private root and identity, mode, local Git and tracked metadata observations, timestamps, incomplete reasons, technology coverage, measurements, decisions, evidence and recovery fields. The body digest is SHA-256 over an ASCII JSON serialization with sorted keys, compact separators, escaped non-ASCII characters, no NaN, and the digest field omitted. The completion record binds exact bytes of both reports to the run ID. Files are flushed and committed individually, and the marker is committed last. This detects incomplete pairs after interruption. Digests provide consistency checks. Keep all three files in the same private directory.
 
-## Exit codes
+`report --retirement-file` validates and renders the retirement pair. `report --file` and `report --id` continue to read legacy scan and fixture reports. `verify` validates the private pair, rechecks the bound project and observes only the offered directory entries. It reports `PRESENT`, `CHANGED`, `MISSING_SINCE_SCAN` or `UNKNOWN`. Candidate descendants and tracked working-tree contents are outside follow-up verification. Run it only on a separate request.
 
-| Code | Meaning |
-|---:|---|
-| 0 | Command completed; for restore, a supported preview was produced |
-| 2 | Invalid/unsupported root or other Hibernator input error |
-| 3 | Incomplete, unverified, or unsupported operation; includes production apply refusal |
-| 4 | Invalid, tampered, stale, or unreadable plan/report |
-| 5 | Approval is unavailable or was declined |
-| 6 | Partial cleanup outcome (reserved; production cleanup is disabled) |
-| 7 | Critical preservation/integrity failure (reserved; production cleanup is disabled) |
-| 8 | Internal or filesystem I/O error |
+## Legacy apply and exit statuses
 
-No `--yes` option exists. Do not treat a plan digest as proof of human identity or as authorization to invoke another deletion tool.
+`apply` accepts the old option shape and immediately returns `APPLY_UNSUPPORTED`. It reads no plan, receives no input, runs no inspection and writes no refusal file. Legacy plans retain their distinct schema-2 content fingerprints.
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | Completed retirement (`READY_FOR_MANUAL_REVIEW` or `NO_CANDIDATES`), successful observation or legacy command |
+| 2 | Invalid input, root or output directory |
+| 3 | Incomplete inspection or unknown verification entry |
+| 4 | Invalid, tampered, incomplete or stale report or plan |
+| 5 | Legacy apply refused |
+| 6–7 | Reserved legacy statuses |
+| 8 | Unexpected I/O failure, including incomplete report-pair write |
+| 130 | Interrupted |
+
+`READY_FOR_MANUAL_REVIEW` means an advisory pair exists. `FAILED` indicates an invalid request or unexpected inspection error. `INCOMPLETE` suppresses actionable candidates. Hibernator reclaims zero bytes.

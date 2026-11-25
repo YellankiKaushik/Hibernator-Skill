@@ -3,12 +3,27 @@
 from __future__ import annotations
 
 import json
-import os
-import stat
 from pathlib import Path
 
-from . import RULE_PACK_VERSION
+from .paths import open_observed
 from .util import is_regular_nofollow, is_reparse_point
+
+
+def protected_secret(name: str) -> bool:
+    name = name.casefold()
+    return (name == ".env" or name.startswith(".env.") or name in {
+        "id_rsa", "id_ed25519", "credentials.json", ".netrc", ".npmrc", ".pypirc",
+        "pip.conf", "pip.ini", "secrets.json", ".yarnrc", ".yarnrc.yml",
+    } or Path(name).suffix in {".pem", ".key", ".pfx", ".p12", ".kdbx"})
+
+
+def _package_json(path: Path) -> dict:
+    info = path.lstat()
+    if is_reparse_point(info) or info.st_size > 1 << 20:
+        return {}
+    with open_observed(path, info) as stream:
+        value = json.loads(stream.read((1 << 20) + 1))
+    return value if isinstance(value, dict) else {}
 
 
 RULES = [
@@ -28,12 +43,12 @@ def _marker_exists(marker: str, start: Path, project_root: Path) -> bool:
             package = current / "package.json"
             if is_regular_nofollow(package):
                 try:
-                    data = json.loads(package.read_text(encoding="utf-8"))
+                    data = _package_json(package)
                     dependency = marker.split(":", 1)[1]
                     groups = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies")
                     if any(dependency in data.get(group, {}) for group in groups if isinstance(data.get(group, {}), dict)):
                         return True
-                except (OSError, UnicodeError, json.JSONDecodeError):
+                except (OSError, ValueError, RecursionError):
                     pass
         elif "*" in marker:
             if any(is_regular_nofollow(candidate) for candidate in current.glob(marker)):
@@ -71,41 +86,24 @@ def rule_for(path: Path, project_root: Path) -> tuple[dict | None, str | None]:
     return None, None
 
 
-def technology_markers(root: Path) -> list[str]:
+def technology_markers(root: Path, *, observed: dict[Path, set[str]]) -> list[str]:
     found: set[str] = set()
     skip = {".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycache__"}
-    root_device = int(root.lstat().st_dev)
-    def fail_on_walk_error(error: OSError) -> None:
-        raise error
-
-    for current, dirs, files in os.walk(root, topdown=True, onerror=fail_on_walk_error, followlinks=False):
-        base = Path(current)
-        if base != root and (base / ".git").exists():
-            dirs[:] = []
+    for base, names in observed.items():
+        if any(part in skip for part in base.relative_to(root).parts):
             continue
-        safe_dirs = []
-        for name in dirs:
-            child = base / name
-            try:
-                info = child.lstat()
-            except OSError:
-                continue
-            if name not in skip and stat.S_ISDIR(info.st_mode) and not is_reparse_point(info) and int(info.st_dev) == root_device:
-                safe_dirs.append(name)
-        dirs[:] = safe_dirs
-        names = {name for name in files if is_regular_nofollow(base / name)}
         if names & {"pyproject.toml", "requirements.txt", "Pipfile", "setup.py"}:
             found.add("Python")
         if "package.json" in names:
             found.add("Node.js")
             try:
-                text = (base / "package.json").read_text(encoding="utf-8")
+                text = json.dumps(_package_json(base / "package.json"))
                 if any(key in text for key in ('"react"', '"react-dom"')):
                     found.add("React")
                 if '"next"' in text or any(is_regular_nofollow(base / marker) for marker in ("next.config.js", "next.config.mjs", "next.config.ts")):
                     found.add("Next.js")
                 if '"vite"' in text or any(is_regular_nofollow(base / marker) for marker in ("vite.config.js", "vite.config.ts")):
                     found.add("Vite")
-            except (OSError, UnicodeError):
+            except (OSError, ValueError, RecursionError):
                 pass
     return sorted(found)

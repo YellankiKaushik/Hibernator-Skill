@@ -8,12 +8,13 @@ import sys
 from pathlib import Path
 
 from . import RULE_PACK_VERSION, __version__
-from .approval import confirm_exact_plan
 from .discovery import scan
-from .errors import ApplyRefused, HibernatorError, InvalidPlan
-from .plans import load_plan, make_plan, save_plan, validate_current
-from .reports import cleanup_report, load_report, load_report_file, render_report, report_directory, save_report, write_scan_report
+from .errors import HibernatorError, InvalidPlan
+from .plans import make_plan, save_plan
+from .reports import load_report, load_report_file, render_report, report_directory, write_scan_report
 from .restore import restore_preview
+from .retirement import PairWriteError, retire, verify
+from .retirement_reports import load_retirement_report, render_retirement
 from .rules import RULES
 
 
@@ -25,9 +26,20 @@ def _add_format(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="hibernator", description="Scan, classify, and prepare a safe local project hibernation plan.")
+    parser = argparse.ArgumentParser(prog="hibernator", description="Prepare read-only local Git retirement reports.")
     parser.add_argument("--version", action="version", version=f"Hibernator {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
+    retire_cmd = commands.add_parser("retire", help="Inspect one Git root and save private retirement reports")
+    retire_cmd.add_argument("--project", required=True, metavar="PATH")
+    retire_cmd.add_argument("--output", metavar="DIRECTORY", help="Existing private directory outside the project")
+    retire_cmd.add_argument("--deep", action="store_true", help="Hash eligible file contents")
+    retire_cmd.add_argument("--min-size-mib", default="0", metavar="N")
+    retire_cmd.add_argument("--exclude", action="append", default=[], metavar="RELATIVE_PATH")
+    retire_cmd.add_argument("--show-paths", action="store_true", help="Display local absolute paths")
+    _add_format(retire_cmd)
+    verify_cmd = commands.add_parser("verify", help="Observe paths listed in a completed private retirement report")
+    verify_cmd.add_argument("--report", required=True, type=Path, metavar="FILE")
+    _add_format(verify_cmd)
     scan_cmd = commands.add_parser("scan", help="Read-only project inventory and classification")
     scan_cmd.add_argument("--project", required=True, metavar="PATH")
     scan_cmd.add_argument("--save-report", action="store_true")
@@ -38,13 +50,14 @@ def build_parser() -> argparse.ArgumentParser:
     plan_cmd.add_argument("--exclude", action="append", default=[], metavar="RELATIVE_PATH")
     plan_cmd.add_argument("--output", type=Path)
     _add_format(plan_cmd)
-    apply_cmd = commands.add_parser("apply", help="Request exact human approval for a plan")
+    apply_cmd = commands.add_parser("apply", help="Refuse legacy apply; manual cleanup is owner-managed")
     apply_cmd.add_argument("--plan", required=True, type=Path)
     _add_format(apply_cmd)
     report_cmd = commands.add_parser("report", help="Display a saved JSON report")
     report_source = report_cmd.add_mutually_exclusive_group(required=True)
     report_source.add_argument("--id", help="Load a report from the local report store")
     report_source.add_argument("--file", type=Path, help="Load a report JSON file by path")
+    report_source.add_argument("--retirement-file", type=Path, help="Read a completed private retirement report pair")
     _add_format(report_cmd)
     restore_cmd = commands.add_parser("restore", help="Show a non-mutating restoration preview")
     restore_cmd.add_argument("--project", required=True, metavar="PATH")
@@ -61,7 +74,25 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _print_json(value) -> None:
-    print(json.dumps(value, indent=2, ensure_ascii=False))
+    print(json.dumps(value, indent=2, ensure_ascii=True))
+
+
+def _print_retirement_summary(summary: dict) -> None:
+    print(f"{summary['status']} · {summary['mode']} · {summary['report_id']}")
+    totals = summary["totals"]
+    print(f"Observed {totals['observed_logical_bytes']:,} logical bytes. "
+          f"Offered {totals['offered_logical_bytes']:,} logical bytes across {totals['offered_count']} paths.")
+    print(f"Preserved {totals['review_count']} review and {totals['blocked_count']} blocked items.")
+    for item in summary["candidates"]:
+        print(f"  {json.dumps(item['path'], ensure_ascii=True)} · {item['logical_bytes']:,} bytes")
+    for reason in summary["incomplete_reasons"]:
+        print(f"Incomplete: {reason}")
+    if "root" in summary:
+        print(f"Project {json.dumps(summary['root'], ensure_ascii=True)}")
+    print(f"Reports in {json.dumps(summary['report_store'], ensure_ascii=True)}")
+    for kind, path in summary["reports"].items():
+        print(f"  {kind} {json.dumps(path, ensure_ascii=True)}")
+    print(summary["message"])
 
 
 def _render_scan(report: dict) -> str:
@@ -94,6 +125,28 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     output_format = getattr(args, "format", "text")
     try:
+        if args.command == "retire":
+            summary = retire(
+                args.project, output=args.output, deep=args.deep, minimum=args.min_size_mib,
+                excludes=args.exclude, show_paths=args.show_paths,
+                progress=lambda message: print(f"Hibernator: {message}", file=sys.stderr, flush=True),
+            )
+            if output_format == "json":
+                _print_json(summary)
+            else:
+                _print_retirement_summary(summary)
+            return EXIT["incomplete"] if summary["status"] == "INCOMPLETE" else EXIT["ok"]
+        if args.command == "verify":
+            value = verify(args.report)
+            if output_format == "json":
+                _print_json(value)
+            else:
+                for item in value["observations"]:
+                    print(f"{item['observation']} {json.dumps(item['path'], ensure_ascii=True)}")
+                print("Git index/HEAD metadata changed." if value["git_metadata_changed"] else "Git index/HEAD metadata matches.")
+                print(value["limitations"])
+                print(value["message"])
+            return EXIT["incomplete"] if any(i["observation"] == "UNKNOWN" for i in value["observations"]) else EXIT["ok"]
         if args.command == "scan":
             value = scan(args.project).to_dict()
             if args.save_report:
@@ -123,47 +176,23 @@ def main(argv: list[str] | None = None) -> int:
                 for candidate in value["candidates"]:
                     print(f"  {candidate['path']} ({candidate['logical_bytes']} bytes) - {candidate['reason']}")
                 print(f"Saved plan: {target}")
-                print("Review the complete list. Production apply is disabled pending platform security review.")
+                print("Review the complete list. Manual cleanup is owner-managed.")
             return EXIT["ok"]
         if args.command == "apply":
-            plan = load_plan(args.plan)
-            validate_current(plan)
-            root = Path(plan["root"])
-            before_scan = scan(root).to_dict()
-            before_free = shutil.disk_usage(root).free
-            if not sys.stdin.isatty():
-                status = "APPROVAL_REQUIRED"
-                outcomes = [{"path": item["path"], "status": "NOT_ATTEMPTED", "reason": "A direct human-operated terminal is required."} for item in plan["candidates"]]
-                integrity = "verified before apply request; no files changed"
-                exit_code = EXIT["approval"]
-            else:
-                try:
-                    confirm_exact_plan(plan, input_fn=input, output=sys.stderr if output_format == "json" else sys.stdout)
-                except (ApplyRefused, EOFError) as exc:
-                    status = "DECLINED"
-                    outcomes = [{"path": item["path"], "status": "NOT_ATTEMPTED", "reason": str(exc) or "No approval was provided."} for item in plan["candidates"]]
-                    integrity = "verified before approval refusal; no files changed"
-                    exit_code = EXIT["approval"]
-                else:
-                    status = "APPROVED_BUT_UNSUPPORTED"
-                    outcomes = [{"path": item["path"], "status": "NOT_ATTEMPTED", "reason": "Exact plan approval was recorded, but production cleanup is disabled pending platform security review."} for item in plan["candidates"]]
-                    integrity = "verified before unsupported apply; no files changed"
-                    exit_code = EXIT["incomplete"]
-            after_scan = scan(root).to_dict()
-            after_free = shutil.disk_usage(root).free
-            report = cleanup_report(
-                plan, outcomes, status, before_scan=before_scan, after_scan=after_scan,
-                before_free=before_free, after_free=after_free, git_integrity=integrity,
-            )
-            report_path = save_report(report, directory=report_directory(), project_root=root)
-            report["saved_report"] = str(report_path)
+            message = "Apply is unsupported. The owner alone can choose manual cleanup outside Hibernator."
             if output_format == "json":
-                _print_json(report)
+                _print_json({"status": "APPLY_UNSUPPORTED", "message": message, "removed_logical_bytes": 0})
             else:
-                print(render_report(report))
-                print("No files were changed. Real cleanup is unsupported in this build.")
-            return exit_code
+                print(message, file=sys.stderr)
+            return EXIT["approval"]
         if args.command == "report":
+            if args.retirement_file:
+                value = load_retirement_report(args.retirement_file)
+                if output_format == "json":
+                    _print_json({key: item for key, item in value.items() if key not in {"root", "root_stamp"}})
+                else:
+                    print(render_retirement(value))
+                return EXIT["ok"]
             try:
                 value = load_report(args.id) if args.id else load_report_file(args.file)
             except (OSError, json.JSONDecodeError, ValueError) as exc:
@@ -191,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
             value = {
                 "version": __version__, "python": platform.python_version(), "minimum_python": "3.10",
                 "git_available": shutil.which("git") is not None, "platform": platform.platform(),
-                "destructive_apply": "disabled pending platform security review",
+                "destructive_apply": "permanently unsupported; owner-managed manual cleanup",
                 "reports_directory": str(report_directory()),
             }
             if output_format == "json":
@@ -210,12 +239,18 @@ def main(argv: list[str] | None = None) -> int:
                     required = f"; required={', '.join(rule['requires'])}" if rule.get("requires") else ""
                     print(f"{rule['id']}: {rule['kind']} paths={', '.join(rule['paths'])}{required}; any-context={', '.join(rule['context'])}")
             return EXIT["ok"]
-    except ApplyRefused as exc:
+    except KeyboardInterrupt:
+        print("Hibernator interrupted.", file=sys.stderr)
         if output_format == "json":
-            _print_json({"error": str(exc), "code": "APPLY_REFUSED"})
+            _print_json({"status": "INCOMPLETE", "code": "INTERRUPTED"})
+        return 130
+    except PairWriteError as exc:
+        if output_format == "json":
+            _print_json({"status": "INCOMPLETE", "code": "REPORT_PAIR_WRITE_FAILED", "report_id": exc.report_id,
+                         "message": str(exc)})
         else:
-            print(f"Apply refused: {exc}", file=sys.stderr)
-        return EXIT["approval"]
+            print(str(exc), file=sys.stderr)
+        return EXIT["internal"]
     except InvalidPlan as exc:
         if output_format == "json":
             _print_json({"error": str(exc), "code": "INVALID_PLAN"})
@@ -224,15 +259,18 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT["plan"]
     except HibernatorError as exc:
         if output_format == "json":
-            _print_json({"error": str(exc), "code": "HIBERNATOR_ERROR"})
+            _print_json({"error": str(exc), "code": "HIBERNATOR_ERROR",
+                         **({"status": "FAILED"} if args.command == "retire" else {})})
         else:
             print(f"Hibernator: {exc}", file=sys.stderr)
         return EXIT["input"]
     except OSError as exc:
+        message = "Local inspection encountered an unexpected I/O error." if args.command in {"retire", "verify"} else str(exc)
         if output_format == "json":
-            _print_json({"error": str(exc), "code": "IO_ERROR"})
+            _print_json({"error": message, "code": "IO_ERROR",
+                         **({"status": "FAILED"} if args.command == "retire" else {})})
         else:
-            print(f"I/O error: {exc}", file=sys.stderr)
+            print(f"I/O error: {message}", file=sys.stderr)
         return EXIT["internal"]
     return EXIT["internal"]
 

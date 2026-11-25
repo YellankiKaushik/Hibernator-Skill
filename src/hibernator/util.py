@@ -51,12 +51,18 @@ def is_directory_nofollow(path: Path) -> bool:
 
 
 def tree_fingerprint(path: Path) -> str:
-    """Hash names, types, identities, and sizes without following links."""
+    """Hash metadata and regular file contents using the legacy schema-2 representation."""
+    from .paths import open_observed, same_open_file
+    from .rules import protected_secret
+
     rows: list[tuple] = []
     stack = [path]
+    device = path.lstat().st_dev
     while stack:
         current = stack.pop()
         info = current.lstat()
+        if info.st_dev != device or is_reparse_point(info) or stat.S_ISLNK(info.st_mode):
+            raise OSError("An artifact directory changed or crossed a filesystem boundary.")
         if current != path:
             rel = current.relative_to(path).as_posix()
             rows.append((rel, int(info.st_mode), int(info.st_dev), int(info.st_ino), int(info.st_size), int(info.st_mtime_ns)))
@@ -65,20 +71,22 @@ def tree_fingerprint(path: Path) -> str:
                 for entry in entries:
                     child = Path(entry.path)
                     child_info = child.lstat()
+                    if child_info.st_dev != device or protected_secret(child.name):
+                        raise OSError("An artifact entry is protected.")
                     if stat.S_ISLNK(child_info.st_mode) or is_reparse_point(child_info):
-                        rows.append((child.relative_to(path).as_posix(), int(child_info.st_mode), int(child_info.st_dev), int(child_info.st_ino), int(child_info.st_size), int(child_info.st_mtime_ns)))
+                        raise OSError("An artifact entry became a link or reparse point.")
                     elif stat.S_ISDIR(child_info.st_mode):
                         stack.append(child)
                     else:
                         file_hash = None
                         if stat.S_ISREG(child_info.st_mode):
                             hasher = hashlib.sha256()
-                            with child.open("rb") as handle:
+                            with open_observed(child, child_info) as handle:
                                 before = os.fstat(handle.fileno())
                                 for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                                     hasher.update(chunk)
                                 after = os.fstat(handle.fileno())
-                            if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns):
+                            if not same_open_file(before, after):
                                 raise OSError(f"File changed while fingerprinting: {child}")
                             file_hash = hasher.hexdigest()
                         rows.append((child.relative_to(path).as_posix(), int(child_info.st_mode), int(child_info.st_dev), int(child_info.st_ino), int(child_info.st_size), int(child_info.st_mtime_ns), file_hash))

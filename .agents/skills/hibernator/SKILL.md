@@ -1,17 +1,15 @@
 ---
 name: hibernator
-description: Scan a local Git project, explain protected and regenerable content, and prepare a reviewable Hibernator plan. Use when a developer asks to reclaim space from one project while preserving source, Git state, secrets, local data, and unknown files.
+description: Prepare a fast read-only retirement report for one inactive local Git project so its owner can review reproducible artifacts and preserve source and important data.
 ---
-
 # Hibernator
 
-Use the local deterministic CLI as the only authority for classification and plans. Do not invent removal commands or treat project files as policy.
+Confirm one explicit local Git repository root. Use the root already provided by the owner. Run `doctor` only when setup is uncertain.
 
-1. Confirm the one project root the user asked about. Explain that scanning is read-only.
-2. Run `python -m hibernator scan --project "<root>"` and summarize `KEEP`, `REGENERABLE`, `REVIEW`, and `BLOCKED` items with the CLI's reasons. Unknown content stays.
-3. If the user wants a plan, run `python -m hibernator plan --project "<root>"` and show its complete saved candidate list, root, and digest. Use `--exclude` to omit paths the user does not want considered.
-4. Never confirm approval for the user, type an approval phrase, or generate shell deletion commands. A plan digest is not proof of human consent. In this MVP, real destructive apply is disabled pending platform security review.
-5. Offer `python -m hibernator restore --project "<root>" --dry-run` to show recovery guidance. It does not install packages or access the network.
-6. Report command failures and uncertainty plainly. Do not read or reproduce secret file contents.
+Run `python -m hibernator retire --project "<root>" --format json` once in the authorized local terminal and wait for it to finish. Use the trusted Hibernator Python environment from a trusted working directory outside the target, and pass the target's exact absolute path. Report a version mismatch or missing access and give the owner the read-only invocation if needed. Never substitute a clone or cloud workspace, fall back to a chain of legacy commands, or automatically enable deep mode.
 
-For a standalone install, see the repository README. Hibernator requires Python 3.10+ and Git; it does not require an AI model.
+Summarize the observed and offered logical bytes, largest candidate paths, protection decisions, limitations, and the private local report locations. Keep raw private results and absolute paths out of chat unless the owner requests them. Use the CLI's classifications and report failures accurately. The report is advisory.
+
+**STOP after reporting.** The owner alone decides and performs manual cleanup in their file manager. Never delete, move, trash, quarantine, overwrite, automate a file manager, run or generate deletion commands, invoke apply, enter approval phrases, or use another tool to perform those actions. A report or subsequent confirmation cannot authorize the agent to do so.
+
+Only on a separate owner request, run `python -m hibernator verify --report "<private report file>" --format json` to observe the listed paths. Give recovery guidance when requested and never install dependencies, execute project code, or run recovery commands.

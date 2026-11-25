@@ -1,5 +1,7 @@
 # Restoration guidance
 
+Each retirement candidate records its working directory, preserved inputs and recovery guidance from the same inventory. Review original runtime versions, lifecycle scripts and availability before running any recovery steps yourself. The standalone preview remains available for a broader advisory inventory.
+
 `hibernator restore --project PATH --dry-run` inspects supported dependency manifests throughout one Git repository and prints suggestions. It does not run package managers, access the network, create virtual environments, or modify the project.
 
 The preview requires the selected Git root. It ignores nested Git repositories, symlinked or reparse-point entries, and directories on another filesystem device. Manifest and lockfile evidence must be a regular non-link file. Read-only traversal is path-based and can race with concurrent filesystem changes; this check is not a deletion safety guarantee.

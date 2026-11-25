@@ -1,5 +1,7 @@
 # Production cleanup engineering status
 
+> This document records the retired fixture-only deletion design. Production deletion is outside Hibernator’s scope. The prototype now lives under `tests/`.
+
 ## Status
 
 Production deletion remains **disabled**. `apply_production()` always refuses, and the CLI only records that an approved plan was not attempted. The descriptor-relative module in `src/hibernator/secure_remove.py` is unwired and can only be exercised against in-memory registered test fixtures with a synthetic marker under the system temporary directory. It is an engineering prototype, not an enabled cleanup backend.

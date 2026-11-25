@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from hibernator.errors import ApplyRefused, InvalidPlan
 from hibernator.plans import make_plan
-from hibernator.secure_remove import UnsupportedDeletionPlatform, _preflight, remove_test_fixture_candidate
+from tests.secure_remove_fixture import UnsupportedDeletionPlatform, _preflight, remove_test_fixture_candidate
 from tests.helpers import node_fixture
 
 
@@ -113,7 +113,7 @@ class DescriptorRelativeRemovalTests(unittest.TestCase):
             with self.assertRaises(UnsupportedDeletionPlatform):
                 remove_test_fixture_candidate(self.plan, "node_modules")
             return
-        real_entry_info = __import__("hibernator.secure_remove", fromlist=["_entry_info"])._entry_info
+        real_entry_info = __import__("tests.secure_remove_fixture", fromlist=["_entry_info"])._entry_info
         mount = self.fixture.root / "node_modules/pkg/mounted"
         mount.mkdir()
         self.plan = make_plan(self.fixture.root)
@@ -127,7 +127,7 @@ class DescriptorRelativeRemovalTests(unittest.TestCase):
                 return os.stat_result(fields)
             return info
 
-        with patch("hibernator.secure_remove._entry_info", side_effect=fake_mount_info):
+        with patch("tests.secure_remove_fixture._entry_info", side_effect=fake_mount_info):
             with self.assertRaises(ApplyRefused):
                 remove_test_fixture_candidate(self.plan, "node_modules")
         self.assertTrue((self.fixture.root / "node_modules/pkg/index.js").is_file())

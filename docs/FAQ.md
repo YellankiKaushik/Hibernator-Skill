@@ -2,7 +2,7 @@
 
 ## Does Hibernator delete files today?
 
-No. The CLI can scan, classify, create plans, display reports, and show restore guidance. `apply` records whether approval was unavailable, declined, or exact, but production deletion remains disabled on every platform pending independent filesystem security review.
+The CLI prepares an advisory report, and the owner decides what to do in their own file manager. Production `apply` immediately returns exit 5. An optional separate `verify` observes candidate paths and Git index/HEAD metadata.
 
 ## Does an ignored or generated-looking folder become removable automatically?
 
@@ -16,7 +16,7 @@ No. File lengths are logical estimates. The cleanup report keeps candidate bytes
 
 No. `restore --dry-run` only prints suggestions. A developer may later run a package manager manually after reviewing the commands; package managers can use the network and execute lifecycle scripts.
 
-## Does scanning work offline?
+## Does retirement work offline?
 
 The CLI scan, plan, report, and restore preview make no network calls. Installing the package may require setuptools from a local cache or package index. A checkout can be used with `PYTHONPATH=src` and `python -m hibernator` without a package install.
 

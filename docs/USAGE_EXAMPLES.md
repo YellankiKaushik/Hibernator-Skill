@@ -1,43 +1,25 @@
 # Usage examples
 
-All examples below are illustrative and use synthetic project descriptions. **This preview cannot perform cleanup on a user's project.**
-
-## Python project
-
-For a repository with `pyproject.toml` and a local `.venv`, scan and review a plan:
+## Mixed local Git project
 
 ```text
-python -m hibernator scan --project /work/my-python-app
-python -m hibernator plan --project /work/my-python-app
-python -m hibernator restore --project /work/my-python-app --dry-run
+hibernator retire --project "/work/inactive-project" --output "/private/hibernator-results"
 ```
 
-The environment may be classified as regenerable when project evidence is present. Tracked files, local databases, `.env` files, uploads, model weights, and unknown contents remain protected or under review.
+Create the private output directory separately. Read the Markdown report for exact paths, preservation evidence, recovery inputs and owner checklist. The JSON stores the bound local root for separate verification.
 
-## React or Next.js project
-
-For a React project with `package.json`, `package-lock.json`, and `node_modules`, Hibernator can identify the dependency directory for review and show `npm ci` as a restoration suggestion. A recognized `.next/cache` is considered only with Next.js evidence. Multiple lockfiles require a human package-manager choice.
+## Prioritize larger paths
 
 ```text
-hibernator scan --project C:\work\portfolio-site
-hibernator plan --project C:\work\portfolio-site --exclude node_modules
+python -m hibernator retire --project "/work/inactive-project" --min-size-mib 64 --exclude apps/demo/node_modules --format json
 ```
 
-## Hackathon project
+An exclusion must match an eligible path in your actual project. The detailed report records filtered paths as preserved.
 
-Repositories often contain generated dependencies next to downloaded datasets, demos, recordings, and local databases. Hibernator keeps unknown files visible for review and does not treat Git ignore rules as proof that content can be discarded.
+## Observe changes later
 
 ```text
-hibernator scan --project /work/hackathon-demo --format json
-hibernator plan --project /work/hackathon-demo
+hibernator verify --report "/private/hibernator-results/retirement-RUN_ID/retirement.json"
 ```
 
-## Portfolio codebase
-
-Use a plan to inspect eligible paths and their reasons before taking any action. In this preview-only build, `apply` records the approval/refusal workflow but does not delete files, even after exact interactive confirmation.
-
-```text
-hibernator plan --project /work/portfolio
-hibernator report --file /path/to/a/saved/report.json
-hibernator restore --project /work/portfolio --dry-run
-```
+Verification observes the listed path entries and Git index/HEAD metadata. A missing observation establishes absence at that time. Recovery hints are for owner review. For independent suggestions, run `hibernator restore --project PATH --dry-run`.

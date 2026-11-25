@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from typing import TextIO
 
-from .errors import ApplyRefused
+from hibernator.errors import ApplyRefused
 
 
 def confirm_exact_plan(plan: dict, input_fn=input, output: TextIO | None = None) -> None:

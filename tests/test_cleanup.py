@@ -6,8 +6,9 @@ from io import StringIO
 from unittest.mock import patch
 from unittest.mock import patch
 
-from hibernator.approval import confirm_exact_plan
-from hibernator.cleaner import _unregister_test_owned_root, apply_production, apply_test_fixture
+from tests.approval_fixture import confirm_exact_plan
+from hibernator.cleaner import apply_production
+from tests.cleaner_fixture import _unregister_test_owned_root, apply_test_fixture
 from hibernator.errors import ApplyRefused, InvalidPlan
 from hibernator.plans import make_plan
 from tests.helpers import node_fixture
@@ -96,7 +97,7 @@ class CleanupTests(unittest.TestCase):
 
     def test_interrupted_fixture_cleanup_leaves_durable_partial_report(self):
         plan = make_plan(self.fixture.root)
-        with patch("hibernator.cleaner.shutil.rmtree", side_effect=KeyboardInterrupt):
+        with patch("tests.cleaner_fixture.shutil.rmtree", side_effect=KeyboardInterrupt):
             with self.assertRaises(KeyboardInterrupt):
                 apply_test_fixture(plan, self.fixture.root)
         reports = list(self.fixture.root.parent.glob("report-*.json"))
@@ -109,7 +110,7 @@ class CleanupTests(unittest.TestCase):
 
     def test_removal_error_is_reported_unknown_not_complete_failure(self):
         plan = make_plan(self.fixture.root)
-        with patch("hibernator.cleaner.shutil.rmtree", side_effect=PermissionError("synthetic locked entry")):
+        with patch("tests.cleaner_fixture.shutil.rmtree", side_effect=PermissionError("synthetic locked entry")):
             result = apply_test_fixture(plan, self.fixture.root)
         self.assertEqual("PARTIAL", result["status"])
         self.assertEqual("UNKNOWN", result["outcomes"][0]["status"])
@@ -119,7 +120,7 @@ class CleanupTests(unittest.TestCase):
 
     def test_prejournal_failure_prevents_fixture_deletion(self):
         plan = make_plan(self.fixture.root)
-        with patch("hibernator.cleaner.save_report", side_effect=OSError("synthetic journal failure")):
+        with patch("tests.cleaner_fixture.save_report", side_effect=OSError("synthetic journal failure")):
             with self.assertRaises(OSError):
                 apply_test_fixture(plan, self.fixture.root)
         self.assertTrue((self.fixture.root / "node_modules/pkg/index.js").exists())

@@ -5,13 +5,13 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from hibernator.cleaner import _register_test_owned_root, _unregister_test_owned_root
+from tests.cleaner_fixture import _register_test_owned_root, _unregister_test_owned_root
 
 
 class GitFixture:
     def __init__(self):
         self._temp = tempfile.TemporaryDirectory(prefix="hibernator-test-")
-        self.root = Path(self._temp.name) / "project"
+        self.root = Path(self._temp.name).resolve() / "project"
         self.root.mkdir()
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
         subprocess.run(["git", "-C", str(self.root), "config", "user.name", "Fixture"], check=True)

@@ -40,9 +40,10 @@ jobs:
         env:
           PYTHONPATH: ''
         run: |
-          .wheel-test/bin/python -m pip install --no-index --no-deps --find-links wheelhouse hibernator-skill==0.1.0
+          .wheel-test/bin/python -m pip install --no-index --no-deps --find-links wheelhouse hibernator-skill
           .wheel-test/bin/hibernator --help
           .wheel-test/bin/python -c "import sys; from pathlib import Path; assert (Path(sys.prefix) / '.agents/skills/hibernator/SKILL.md').is_file()"
+          .wheel-test/bin/python -m tests.wheel_smoke
       - name: Create package test environment (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -53,9 +54,10 @@ jobs:
         env:
           PYTHONPATH: ''
         run: |
-          & .\.wheel-test\Scripts\python.exe -m pip install --no-index --no-deps --find-links wheelhouse hibernator-skill==0.1.0
+          & .\.wheel-test\Scripts\python.exe -m pip install --no-index --no-deps --find-links wheelhouse hibernator-skill
           & .\.wheel-test\Scripts\hibernator.exe --help
           & .\.wheel-test\Scripts\python.exe -c "import sys; from pathlib import Path; assert (Path(sys.prefix) / '.agents' / 'skills' / 'hibernator' / 'SKILL.md').is_file()"
+          & .\.wheel-test\Scripts\python.exe -m tests.wheel_smoke
 
   adversarial-fixtures:
     strategy:
@@ -71,4 +73,4 @@ jobs:
         with:
           python-version: '3.14'
       - name: Run filesystem boundary and plan tests
-        run: python -m unittest -v tests.test_scan tests.test_plans tests.test_cleanup
+        run: python -m unittest -v tests.test_scan tests.test_plans tests.test_cleanup tests.test_retirement

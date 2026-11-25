@@ -2,7 +2,7 @@
 
 ## Scope and current status
 
-Hibernator handles local project paths and prepares cleanup plans. The MVP's real destructive apply is disabled pending a platform-specific security review. Do not use test-only APIs on real project data.
+Hibernator reads one local Git working tree and saves private retirement reports outside it. Production apply promptly refuses and the installed package contains no fixture deletion backend. The owner alone performs manual cleanup. Report a boundary violation, unsafe process invocation, secret-value read, or unexpected project mutation as a security issue.
 
 ## Reporting a vulnerability
 

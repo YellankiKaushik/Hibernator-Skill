@@ -79,6 +79,10 @@ def _node_command(lockfile: str) -> str:
     return "yarn install --immutable"
 
 
+def recovery_hint(inputs: list[str], directory: str, step: str) -> dict:
+    return {"working_directory": directory, "preserve": sorted(inputs), "guidance": step}
+
+
 def restore_preview(project: str | Path) -> dict:
     root = canonical_root(project)
     read_git_state(root)

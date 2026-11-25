@@ -1,5 +1,19 @@
 # Dependency-tree classification evidence
 
+## Retirement rule pack 2026.11.2
+
+| Rule | Positive evidence | Preserved boundaries |
+| --- | --- | --- |
+| `node-dependencies-v2` | Enclosing npm manifest and one npm lockfile v2/v3; workspace membership when relevant; installed paths, names and versions match lock entries on the public npm registry. | Local, custom or private sources; ambiguous managers; links, package data, unrecognized files and npm shim layouts without verified provenance. |
+| `python-venv-v2` | Local `pyvenv.cfg`, simple pinned `requirements.txt`, and matching installed distribution directories. | Editable or external dependencies, uncertain import roots, archives, local data, hard links and unverified `.pth` entries. |
+| `python-bytecode-v2` | An associated source file for every recognized CPython or PyPy bytecode entry. | Unknown entries, orphaned bytecode and tracked contents. |
+| `pytest-cache-v2` | A pytest configuration section and recognized cache structure. | Arbitrary files and tracked contents. |
+| `next-cache-v2` | Enclosing Next.js manifest/config and recognized webpack or SWC cache files. | Whole builds, deployments, unique output and unverified contents. |
+
+A Vite optimizer subtree can be included inside an eligible npm candidate when project context and the cache structure match. A protected or uncertain parent suppresses child suggestions. The report lists detected, partially supported and unsupported technologies. Yarn/pnpm linked stores and generic Rust, Java, .NET, Flutter, Ruff, mypy and other build artifacts stay review-only.
+
+## Legacy scan and schema-2 preview
+
 The fixtures in `tests/test_realistic_dependency_trees.py` generate disposable Git repositories. They do not download packages, create real virtual environments, run install hooks, or target personal projects. The Windows fixture uses `Scripts/` and `Lib/` paths; POSIX fixtures use `bin/` and a `lib/python<runtime-version>/` site-packages path.
 
 | Synthetic layout | Candidate result | Eligible logical bytes | Evidence |

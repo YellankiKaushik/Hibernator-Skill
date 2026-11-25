@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
 
 from .discovery import scan
-from .util import utc_now
+from .paths import external_directory
+from .util import is_reparse_point, utc_now
 
 
 def report_directory() -> Path:
@@ -37,7 +39,6 @@ def write_scan_report(root: str, report: dict[str, Any] | None = None) -> Path:
         pass
     else:
         raise OSError("Cannot find a default report location outside the scanned project.")
-    directory.mkdir(parents=True, exist_ok=True)
     safe_report = dict(report)
     safe_report["report_type"] = "scan"
     safe_report["report_id"] = uuid.uuid4().hex
@@ -119,15 +120,7 @@ def cleanup_report(
 
 
 def _safe_directory(directory: Path, project_root: Path | None) -> Path:
-    resolved = directory.resolve(strict=False)
-    if project_root is not None:
-        try:
-            resolved.relative_to(project_root.resolve(strict=True))
-        except ValueError:
-            pass
-        else:
-            raise OSError("Reports must be written outside the scanned project.")
-    return resolved
+    return external_directory(directory, project_root)
 
 
 def _fsync_parent_directory(path: Path) -> None:
@@ -148,11 +141,14 @@ def _fsync_parent_directory(path: Path) -> None:
 
 def save_report(report: dict[str, Any], *, directory: Path | None = None, project_root: Path | None = None) -> Path:
     directory = _safe_directory(directory or report_directory(), project_root)
-    directory.mkdir(parents=True, exist_ok=True)
     report_id = report.get("report_id")
     if not isinstance(report_id, str) or not re.fullmatch(r"[0-9a-f]{32}", report_id):
         raise ValueError("Report ID must be a 32-character lowercase hexadecimal identifier.")
     path = directory / f"report-{report_id}.json"
+    if path.exists() or path.is_symlink():
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or is_reparse_point(info) or info.st_nlink != 1:
+            raise OSError("The report destination is linked or unsupported.")
     fd, temp_name = tempfile.mkstemp(prefix=".hibernator-report-", suffix=".tmp", dir=directory)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:

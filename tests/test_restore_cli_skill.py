@@ -12,7 +12,7 @@ from unittest.mock import patch
 import hibernator.restore as restore_module
 import hibernator.util as util
 from hibernator.cli import main
-from hibernator.cleaner import apply_test_fixture
+from tests.cleaner_fixture import apply_test_fixture
 from hibernator.plans import load_plan, make_plan
 from hibernator.restore import restore_preview
 from hibernator.reports import write_scan_report
@@ -224,10 +224,10 @@ class RestoreAndCliTests(unittest.TestCase):
                     code = main(["apply", "--plan", str(plan_path), "--format", "json"])
             self.assertEqual(5, code)
             result = json.loads(out.getvalue())
-            self.assertEqual("APPROVAL_REQUIRED", result["status"])
+            self.assertEqual("APPLY_UNSUPPORTED", result["status"])
             self.assertEqual(0, result["removed_logical_bytes"])
 
-    def test_interactive_apply_records_unsupported_without_deleting(self):
+    def test_apply_ignores_old_approval_without_deleting(self):
         import tempfile
         from hibernator.plans import save_plan
 
@@ -236,28 +236,28 @@ class RestoreAndCliTests(unittest.TestCase):
             plan = make_plan(self.fixture.root)
             save_plan(plan, plan_path)
             out = io.StringIO()
-            with patch("hibernator.cli.report_directory", return_value=Path(tmp)), patch("sys.stdin.isatty", return_value=True), patch("builtins.input", return_value=f"DELETE {plan['digest']}"):
+            with patch("hibernator.cli.report_directory", return_value=Path(tmp)), patch("sys.stdin.isatty", return_value=True), patch("builtins.input", side_effect=AssertionError("old approval would be read")):
                 with redirect_stdout(out), redirect_stderr(io.StringIO()):
                     code = main(["apply", "--plan", str(plan_path), "--format", "json"])
             result = json.loads(out.getvalue())
-            self.assertEqual(3, code)
-            self.assertEqual("APPROVED_BUT_UNSUPPORTED", result["status"])
+            self.assertEqual(5, code)
+            self.assertEqual("APPLY_UNSUPPORTED", result["status"])
             self.assertEqual(0, result["removed_logical_bytes"])
             self.assertTrue((self.fixture.root / "node_modules/pkg/index.js").exists())
 
-    def test_interactive_apply_decline_is_saved_without_deleting(self):
+    def test_apply_ignores_interactive_decline_without_deleting(self):
         from hibernator.plans import save_plan
 
         with tempfile.TemporaryDirectory(prefix="hibernator-cli-test-") as tmp:
             plan_path = Path(tmp) / "plan.json"
             save_plan(make_plan(self.fixture.root), plan_path)
             out = io.StringIO()
-            with patch("hibernator.cli.report_directory", return_value=Path(tmp)), patch("sys.stdin.isatty", return_value=True), patch("builtins.input", return_value="no"):
+            with patch("hibernator.cli.report_directory", return_value=Path(tmp)), patch("sys.stdin.isatty", return_value=True), patch("builtins.input", side_effect=AssertionError("stdin would be read")):
                 with redirect_stdout(out), redirect_stderr(io.StringIO()):
                     code = main(["apply", "--plan", str(plan_path), "--format", "json"])
             result = json.loads(out.getvalue())
             self.assertEqual(5, code)
-            self.assertEqual("DECLINED", result["status"])
+            self.assertEqual("APPLY_UNSUPPORTED", result["status"])
             self.assertEqual(0, result["removed_logical_bytes"])
             self.assertTrue((self.fixture.root / "node_modules/pkg/index.js").exists())
 
@@ -292,7 +292,11 @@ class RestoreAndCliTests(unittest.TestCase):
         match = re.match(r"\A---\nname: ([a-z0-9-]+)\ndescription: .+\n---\n", content, re.S)
         self.assertIsNotNone(match)
         self.assertEqual("hibernator", match.group(1))
-        self.assertIn("Never confirm approval", content)
+        self.assertEqual(1, content.count('python -m hibernator retire --project "<root>" --format json'))
+        self.assertIn("STOP after reporting", content)
+        self.assertIn("The owner alone", content)
+        self.assertIn("Only on a separate", content)
+        self.assertIn("never install", content)
         self.assertNotIn("rm -rf", content)
         project_config = (REPO / "pyproject.toml").read_text(encoding="utf-8")
         self.assertRegex(project_config, r'(?s)\[tool\.setuptools\.data-files\].*?"\.agents/skills/hibernator"\s*=\s*\["\.agents/skills/hibernator/SKILL\.md"\]')

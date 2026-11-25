@@ -1,7 +1,9 @@
 # Architecture
 
-Hibernator is a Python 3.10+ standard-library-first CLI. `cli` is the only public command interface. `git_state` reads Git root, tracked paths, HEAD, and status; `discovery` inventories project markers and classifies paths using the versioned rules in `rules`; `plans` serializes canonical candidates and invalidates stale plans; `cleaner` isolates the test-fixture cleanup pathway and refuses production deletion; `reports` writes local reports outside the project; `restore` prints non-mutating package restoration suggestions.
+`retirement` coordinates input validation, a single working-tree inventory and a private report pair. `git_state` snapshots the selected index and HEAD tree, builds a sorted tracked-prefix index, and checks administrative boundaries. The inventory folds the logical sizes of safe entries bottom-up, stops project discovery at artifact boundaries and continues their protection checks. Project and dependency metadata is scoped to one invocation. Fast fingerprints encode relative path and metadata in deterministic traversal order. Explicit deep mode hashes observed, eligible files without another tree walk.
 
-The Agent Skill is an interaction protocol, not a second cleanup engine. It directs agents to the same CLI and forbids model-generated deletion commands or approval impersonation.
+`retire_rules` applies scoped Node, Python and cache rules, and shares recovery terminology and package-manager guidance with `restore`. `retirement_reports` validates schema and totals, renders inert paths and commits per-file outputs with a completion record. `verify` binds the pair back to the selected root and observes listed directory entries without a full scan.
 
-No server, account system, telemetry, database, remote API, package-manager invocation, or required LLM is part of this MVP.
+Legacy discovery reuses the no-follow metadata enumerator for sizing and topology. It retains its classifications and candidate content hash format. `plans` can consume a prior compatible scan and retains schema-2 validation. The standalone restoration command retains monorepo guidance. Legacy report types stay distinct from retirement.
+
+The Agent Skill delegates to one local `retire` call and stops. The installed package has a plain compatibility refusal for legacy apply. Historical deletion and approval prototypes live in the disposable test harness.

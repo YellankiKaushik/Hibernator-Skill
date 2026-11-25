@@ -1,5 +1,7 @@
 # Preview demo
 
+> The video demonstrates the earlier scan, plan and restore preview on a synthetic project.
+
 This 22-second demo uses excerpts from Hibernator's scan, plan, and restoration preview on a disposable Node.js Git fixture. It shows a protected secret-like filename but contains no secret value. The CLI output is synthetic project evidence. Production deletion is disabled.
 
 - [Download or watch the MP4](https://github.com/YellankiKaushik/Hibernator-Skill/raw/refs/heads/main/docs/media/hibernator-preview-demo.mp4)
