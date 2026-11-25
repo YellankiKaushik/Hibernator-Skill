@@ -8,10 +8,16 @@ from pathlib import Path
 from tests.cleaner_fixture import _register_test_owned_root, _unregister_test_owned_root
 
 
+def temporary_directory(*, prefix: str) -> tempfile.TemporaryDirectory:
+    """Create a fixture under the canonical OS temp directory."""
+    temp_root = Path(tempfile.gettempdir()).resolve(strict=True)
+    return tempfile.TemporaryDirectory(prefix=prefix, dir=temp_root)
+
+
 class GitFixture:
     def __init__(self):
-        self._temp = tempfile.TemporaryDirectory(prefix="hibernator-test-")
-        self.root = Path(self._temp.name).resolve() / "project"
+        self._temp = temporary_directory(prefix="hibernator-test-")
+        self.root = Path(self._temp.name) / "project"
         self.root.mkdir()
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
         subprocess.run(["git", "-C", str(self.root), "config", "user.name", "Fixture"], check=True)
@@ -57,6 +63,12 @@ def node_fixture() -> GitFixture:
 def make_junction(link: Path, target: Path) -> bool:
     if os.name != "nt":
         return False
-    command = f'mklink /J "{link}" "{target}"'
-    result = subprocess.run(["cmd.exe", "/c", command], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    env = {
+        **os.environ,
+        "HIBERNATOR_TEST_JUNCTION_LINK": str(link),
+        "HIBERNATOR_TEST_JUNCTION_TARGET": str(target),
+    }
+    # cmd.exe needs native quoting; subprocess list quoting escapes embedded quotes.
+    command = 'cmd.exe /d /v:off /c mklink /J "%HIBERNATOR_TEST_JUNCTION_LINK%" "%HIBERNATOR_TEST_JUNCTION_TARGET%"'
+    result = subprocess.run(command, env=env, capture_output=True, text=True)
     return result.returncode == 0

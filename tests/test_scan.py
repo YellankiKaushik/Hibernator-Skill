@@ -11,7 +11,7 @@ from hibernator.discovery import scan
 from hibernator.errors import ScanFailure, UnsupportedRoot
 from hibernator.plans import make_plan, validate_current
 from hibernator.errors import InvalidPlan
-from tests.helpers import GitFixture, make_junction, node_fixture
+from tests.helpers import GitFixture, make_junction, node_fixture, temporary_directory
 
 
 class ScanTests(unittest.TestCase):
@@ -186,10 +186,7 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(index_before, hashlib.sha256(index.read_bytes()).hexdigest())
 
     def test_non_git_root_and_repository_subdirectory_are_refused(self):
-        import tempfile
-        from pathlib import Path
-
-        with tempfile.TemporaryDirectory(prefix="hibernator-nongit-test-") as tmp:
+        with temporary_directory(prefix="hibernator-nongit-test-") as tmp:
             with self.assertRaises(UnsupportedRoot):
                 scan(Path(tmp))
         with self.assertRaises(UnsupportedRoot):

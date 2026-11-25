@@ -14,6 +14,22 @@ from .errors import UnsupportedRoot
 from .util import is_reparse_point
 
 
+_WINDOWS_DEVICE_NAMES = {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"} | {
+    f"{prefix}{digit}" for prefix in ("COM", "LPT") for digit in "123456789\u00b9\u00b2\u00b3"
+}
+_WINDOWS_RESERVED_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def _windows_reserved_component(part: str) -> bool:
+    """Apply Windows filename rules consistently on every supported runtime."""
+    stem = part.partition(".")[0].rstrip(" ").upper()
+    return (
+        part.endswith((".", " "))
+        or bool(_WINDOWS_RESERVED_CHARS.search(part))
+        or stem in _WINDOWS_DEVICE_NAMES
+    )
+
+
 def local_path(value: str | os.PathLike[str]) -> Path:
     raw = os.fspath(value)
     win = PureWindowsPath(raw)
@@ -21,7 +37,7 @@ def local_path(value: str | os.PathLike[str]) -> Path:
         not raw or "\0" in raw or raw.startswith(("//", "\\"))
         or win.drive and (os.name != "nt" or not win.is_absolute())
         or os.name == "nt" and any(
-            PureWindowsPath(part).is_reserved() or ":" in part or part.endswith((".", " "))
+            _windows_reserved_component(part)
             for part in win.parts if part != win.anchor and part not in {".", ".."}
         )
         or ".." in Path(raw).parts
@@ -199,11 +215,10 @@ def path_key(path: str) -> str:
 
 
 def relative_path(value: str) -> bool:
-    if not isinstance(value, str) or re.search(r'[\\:*?\[\]<>|"]', value):
+    if not isinstance(value, str) or "[" in value or "]" in value:
         return False
     return all(
-        part not in {"", ".", ".."} and not part.endswith((".", " "))
-        and not PureWindowsPath(part).is_reserved()
+        part not in {"", ".", ".."} and not _windows_reserved_component(part)
         and not any(unicodedata.category(char) in {"Cc", "Cf", "Cs", "Zl", "Zp"} for char in part)
         for part in value.split("/")
     )

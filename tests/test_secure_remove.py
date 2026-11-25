@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from hibernator.errors import ApplyRefused, InvalidPlan
 from hibernator.plans import make_plan
+from tests.cleaner_fixture import _unregister_test_owned_root
 from tests.secure_remove_fixture import UnsupportedDeletionPlatform, _preflight, remove_test_fixture_candidate
 from tests.helpers import node_fixture
 
@@ -44,6 +45,14 @@ class DescriptorRelativeRemovalTests(unittest.TestCase):
             self.assertFalse((self.fixture.root / "node_modules").exists())
             self.assertTrue((self.fixture.root / "src/app.js").is_file())
             self.assertTrue((self.fixture.root / ".hibernator-test-owned").is_file())
+        self.assertEqual(self.sentinel_before, hashlib.sha256(self.sentinel.read_bytes()).hexdigest())
+
+    @unittest.skipUnless(os.name == "posix", "descriptor-relative removal requires POSIX")
+    def test_marked_fixture_without_registration_is_refused(self):
+        _unregister_test_owned_root(self.fixture.root)
+        with self.assertRaisesRegex(ApplyRefused, "registered synthetic Git fixture"):
+            remove_test_fixture_candidate(self.plan, "node_modules")
+        self.assertTrue((self.fixture.root / "node_modules/pkg/index.js").is_file())
         self.assertEqual(self.sentinel_before, hashlib.sha256(self.sentinel.read_bytes()).hexdigest())
 
     def test_stale_plan_is_rejected_before_fixture_removal(self):

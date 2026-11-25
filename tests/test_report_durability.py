@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import os
 import stat
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from hibernator.reports import save_report
+from tests.helpers import temporary_directory
 
 
 class ReportDurabilityTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "posix", "directory fsync is a POSIX journal guarantee")
     def test_report_flushes_file_and_parent_directory(self):
-        with tempfile.TemporaryDirectory(prefix="hibernator-report-durability-") as tmp:
+        with temporary_directory(prefix="hibernator-report-durability-") as tmp:
             real_fsync = os.fsync
             flushed: list[tuple[int, bool]] = []
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import json
 import re
-import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -16,7 +15,7 @@ from tests.cleaner_fixture import apply_test_fixture
 from hibernator.plans import load_plan, make_plan
 from hibernator.restore import restore_preview
 from hibernator.reports import write_scan_report
-from tests.helpers import GitFixture, make_junction, node_fixture
+from tests.helpers import GitFixture, make_junction, node_fixture, temporary_directory
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -182,7 +181,7 @@ class RestoreAndCliTests(unittest.TestCase):
 
     def test_saved_report_redacts_absolute_root(self):
         report = __import__("hibernator.discovery", fromlist=["scan"]).scan(self.fixture.root).to_dict()
-        with tempfile.TemporaryDirectory(prefix="hibernator-report-test-") as tmp:
+        with temporary_directory(prefix="hibernator-report-test-") as tmp:
             with patch("hibernator.reports.report_directory", return_value=Path(tmp)):
                 path = write_scan_report(str(self.fixture.root), report)
             stored_text = path.read_text(encoding="utf-8")
@@ -194,7 +193,7 @@ class RestoreAndCliTests(unittest.TestCase):
 
     def test_plans_created_in_the_same_second_have_distinct_default_files(self):
         argv = ["plan", "--project", str(self.fixture.root), "--format", "json"]
-        with tempfile.TemporaryDirectory(prefix="hibernator-cli-test-") as tmp:
+        with temporary_directory(prefix="hibernator-cli-test-") as tmp:
             with patch("hibernator.cli.report_directory", return_value=Path(tmp)), patch(
                 "hibernator.plans.utc_now", return_value="2026-11-25T00:00:00+00:00"
             ):
@@ -215,7 +214,7 @@ class RestoreAndCliTests(unittest.TestCase):
     def test_noninteractive_apply_returns_refusal_code(self):
         from hibernator.plans import save_plan
 
-        with tempfile.TemporaryDirectory(prefix="hibernator-cli-test-") as tmp:
+        with temporary_directory(prefix="hibernator-cli-test-") as tmp:
             plan_path = Path(tmp) / "plan.json"
             save_plan(make_plan(self.fixture.root), plan_path)
             out = io.StringIO()
@@ -228,10 +227,9 @@ class RestoreAndCliTests(unittest.TestCase):
             self.assertEqual(0, result["removed_logical_bytes"])
 
     def test_apply_ignores_old_approval_without_deleting(self):
-        import tempfile
         from hibernator.plans import save_plan
 
-        with tempfile.TemporaryDirectory(prefix="hibernator-cli-test-") as tmp:
+        with temporary_directory(prefix="hibernator-cli-test-") as tmp:
             plan_path = Path(tmp) / "plan.json"
             plan = make_plan(self.fixture.root)
             save_plan(plan, plan_path)
@@ -248,7 +246,7 @@ class RestoreAndCliTests(unittest.TestCase):
     def test_apply_ignores_interactive_decline_without_deleting(self):
         from hibernator.plans import save_plan
 
-        with tempfile.TemporaryDirectory(prefix="hibernator-cli-test-") as tmp:
+        with temporary_directory(prefix="hibernator-cli-test-") as tmp:
             plan_path = Path(tmp) / "plan.json"
             save_plan(make_plan(self.fixture.root), plan_path)
             out = io.StringIO()

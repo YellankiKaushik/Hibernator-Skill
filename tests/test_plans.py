@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from hibernator.errors import InvalidPlan
 from hibernator.plans import load_plan, make_plan, plan_digest, save_plan, validate_current, validate_plan
-from tests.helpers import node_fixture
+from tests.helpers import make_junction, node_fixture, temporary_directory
 
 
 class PlanTests(unittest.TestCase):
@@ -37,7 +37,7 @@ class PlanTests(unittest.TestCase):
 
     def test_plan_roundtrip_and_tamper_rejected(self):
         value = make_plan(self.fixture.root)
-        with tempfile.TemporaryDirectory(prefix="hibernator-plan-test-") as tmp:
+        with temporary_directory(prefix="hibernator-plan-test-") as tmp:
             path = Path(tmp) / "plan.json"
             save_plan(value, path)
             self.assertEqual(value, load_plan(path))
@@ -51,10 +51,42 @@ class PlanTests(unittest.TestCase):
         with self.assertRaises(InvalidPlan):
             save_plan(make_plan(self.fixture.root), self.fixture.root / "plan.json")
 
+    def test_fixture_temp_alias_is_resolved_before_saving_but_explicit_alias_is_refused(self):
+        plan = make_plan(self.fixture.root)
+        parent = self.fixture.root.parent
+        external = parent / "external"
+        external.mkdir()
+        for destination in (external, self.fixture.root):
+            with self.subTest(destination=destination.name):
+                alias = parent / "temp-alias"
+                if os.name == "nt":
+                    self.assertTrue(make_junction(alias, destination))
+                else:
+                    alias.symlink_to(destination, target_is_directory=True)
+                try:
+                    with self.assertRaisesRegex(InvalidPlan, "unaliased local destination"):
+                        save_plan(plan, alias / "missing-parent" / "plan.json")
+                    self.assertFalse((destination / "missing-parent").exists())
+
+                    if destination == external:
+                        with patch("tests.helpers.tempfile.gettempdir", return_value=str(alias)):
+                            with temporary_directory(prefix="hibernator-output-") as tmp:
+                                output = Path(tmp)
+                                self.assertEqual(external, output.parent)
+                                path = output / "plan.json"
+                                save_plan(plan, path)
+                                self.assertEqual(plan, load_plan(path))
+                        self.assertFalse(output.exists())
+                finally:
+                    if os.name == "nt":
+                        alias.rmdir()
+                    else:
+                        alias.unlink()
+
     def test_failed_save_preserves_existing_plan_and_removes_temporary_file(self):
         original = make_plan(self.fixture.root)
         replacement = make_plan(self.fixture.root, ["node_modules"])
-        with tempfile.TemporaryDirectory(prefix="hibernator-plan-test-") as tmp:
+        with temporary_directory(prefix="hibernator-plan-test-") as tmp:
             path = Path(tmp) / "plan.json"
             save_plan(original, path)
 
