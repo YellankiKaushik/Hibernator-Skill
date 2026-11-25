@@ -1,82 +1,82 @@
-# Agent Skill setup and verification
+# Set up Hibernator for a coding agent
 
-Hibernator has two separate installable parts:
+Install the **Python CLI** in the same environment where the agent runs commands. The **Agent Skill** is a folder of instructions that helps compatible hosts discover the workflow. The two installations are separate. You can use the copy-and-paste prompt with any terminal-capable agent, even if the host has no Skill support.
 
-1. **The Agent Skill** provides instructions to a compatible host. It does not install Hibernator's Python code.
-2. **The Python CLI** performs the local scan and plan operations. Installing it does not register a skill with an agent host.
-
-The CLI must be installed in the Python interpreter available to the agent's local terminal. Hibernator requires Python 3.10+ and Git. See the [README installation steps](../README.md#installation).
+1. Follow the [CLI installation steps](../README.md#installation), then run `hibernator doctor` or `python -m hibernator doctor` with the same Python the agent will use.
+2. Open a trusted workspace in the agent. Give the agent read access to one Git repository you own and write access to a private output folder outside it.
+3. Use the host setup below or paste the prompt. Ask for a read-only scan, a reviewable plan, and a restoration preview.
 
 ## Codex
 
-The cloned repository contains the workspace skill at `.agents/skills/hibernator/SKILL.md`. A compatible Codex workspace can discover skills from `.agents/skills/`. To install from this checkout with GitHub CLI's `gh skill` command:
+The checkout ships [.agents/skills/hibernator/SKILL.md](../.agents/skills/hibernator/SKILL.md). Open the trusted Hibernator checkout and start a new Codex session to use its workspace skill. Select Hibernator from the available skills or ask Codex to use it for a local repository scan.
+
+To make the skill available in another project, run this in that project using a GitHub CLI version with `gh skill` support:
 
 ```sh
-# Run from the project where the skill should be installed.
 gh skill install /path/to/Hibernator-Skill hibernator --from-local --allow-hidden-dirs --agent codex --scope project
-
-# Use user scope for availability across the user's projects.
-gh skill install /path/to/Hibernator-Skill hibernator --from-local --allow-hidden-dirs --agent codex --scope user
 ```
 
-On Windows PowerShell, replace the source with a quoted Windows path, for example `"C:\work\Hibernator-Skill"`. The hidden-directory option is needed because the skill source is under `.agents/`. Review the skill before installing it. Check the host skill listing, then start or reload a session. The [`gh skill install` reference](https://cli.github.com/manual/gh_skill_install) documents repository/local-source installs and agent/scope flags.
+Use `--scope user` to install it for your account instead. Replace the source path with your actual checkout path and quote Windows paths that contain spaces. The hidden-directory option gives the installer access to the source under `.agents/`. Review the skill before installing it. Restart the agent session if it does not discover a newly installed skill. [Codex skills documentation](https://developers.openai.com/codex/skills) · [GitHub CLI skill install reference](https://cli.github.com/manual/gh_skill_install)
+
+A Codex session ran the Hibernator workflow against a disposable Git repository. A separate `codex exec` smoke could not start with the configured account and model.
+
+## Claude Code
+
+Copy the complete `.agents/skills/hibernator/` directory from the checkout to `.claude/skills/hibernator/` in a trusted workspace, or `~/.claude/skills/hibernator/` for your user. Start Claude Code where it can reach the installed CLI. Use the prompt below to specify the repository and output scope. Hibernator invocation in Claude Code has not been verified. [Claude Code skills documentation](https://code.claude.com/docs/en/skills)
 
 ## Gemini CLI
 
-Gemini CLI documents `.agents/skills/` as a workspace and user-scope discovery alias. Install from the public repository into the current workspace:
+Gemini CLI documents `.agents/skills/` as a workspace discovery location. Open the trusted Hibernator checkout or install the skill into a trusted workspace:
 
 ```sh
 gemini skills install https://github.com/YellankiKaushik/Hibernator-Skill --path .agents/skills/hibernator --scope workspace
 gemini skills list
 ```
 
-Alternatively, open a trusted Hibernator checkout; its skill already exists at `.agents/skills/hibernator/`. In an interactive session use `/skills list` and `/skills reload`; ask Gemini to use Hibernator for a project scan. Gemini CLI was not installed in the integration environment, so host invocation remains **unverified**. See the [official Gemini CLI Agent Skills guide](https://geminicli.com/docs/cli/skills/).
+Run `/skills reload` in an interactive session after installation, or start a new session. Hibernator invocation in Gemini CLI has not been verified. [Gemini CLI skills documentation](https://geminicli.com/docs/cli/skills/)
 
 ## Google Antigravity
 
-Antigravity App, IDE, and CLI document `.agents/skills/<skill>/` for workspace skills. Open a trusted Hibernator checkout and verify the skill in the host's skill/customizations listing. In the App, skills may be invoked by their slash command (for this skill, `/hibernator`) or selected automatically based on the request.
+Open the trusted checkout and check the host's skill listing for the workspace skill under `.agents/skills/hibernator/`. Google also documents a user skill location under `~/.gemini/config/skills/hibernator/`. Start a new session after manual installation or use the host's documented reload action. Hibernator invocation in Antigravity has not been verified. [Antigravity skills documentation](https://antigravity.google/docs/skills)
 
-The documented global location is `~/.gemini/config/skills/hibernator/`. A manual installation copies the full `hibernator` skill directory there; on Windows the equivalent base is `%USERPROFILE%\.gemini\config\skills\`. The Antigravity CLI also documents `/skills reload` or starting a new session after adding a skill. The Antigravity launcher was present in the integration environment, but desktop control did not initialize, so **host invocation was not tested**. See [Google's Antigravity Agent Skills guide](https://antigravity.google/docs/skills).
+## Cursor
+
+Use a local Agent session in the trusted checkout. Cursor documents `.agents/skills/` and `.cursor/skills/` as project discovery locations. Start a new session and check the skill listing. Hibernator invocation in Cursor has not been verified. [Cursor Agent Skills documentation](https://cursor.com/docs/skills)
 
 ## Other agents
 
-An agent that can read Agent Skills and run local commands can follow `.agents/skills/hibernator/SKILL.md`. It may run `python -m hibernator ...` directly after the CLI is installed in that same terminal environment. Do not infer host support from the presence of `SKILL.md`; check the host's documented discovery path and confirm it lists the skill.
-
-Agents may inspect and prepare plans, but must not impersonate the user, type approval, or generate deletion commands. Production apply is disabled.
+The CLI works independently of Skill discovery. Install it in the agent's local terminal environment and use the prompt below. Remote or cloud agent sessions can only inspect files available to their own runtime. A README and a Skill file do not grant access to files or commands.
 
 ## Copy-and-paste prompt for any terminal-capable coding agent
 
-Replace `<absolute project path>` and `<private output directory>` before pasting this into your agent.
-
 ```text
-Use the installed Hibernator CLI to preview one local Git repository I own.
-The exact repository root is <absolute project path>. Store the plan at
-<private output directory>/hibernator-plan.json, outside the repository.
+Help me preview one inactive Git project with Hibernator.
 
-Run hibernator doctor, then hibernator scan --project ROOT --format json,
-hibernator plan --project ROOT --output PLAN --format json, and
-hibernator restore --project ROOT --dry-run --format json. Substitute the
-paths above for ROOT and PLAN and quote paths as required by your shell.
-Use python -m hibernator if the installed console command is unavailable.
-Stop and tell me what is missing if you cannot access the terminal, CLI,
-repository, or separate output folder.
+Ask for or confirm the exact local Git repository root and an existing private
+output folder outside that repository. If Hibernator is missing, help me install
+the CLI from its trusted source in a separate environment. Confirm Git and local
+terminal access. Run Hibernator's doctor check before inspecting the project.
 
-Summarize the candidates, KEEP/REVIEW/BLOCKED decisions and their reasons,
-logical byte estimates, and restoration suggestions. Mention incomplete
-inspection or ambiguous evidence. Keep the raw output and absolute paths
-private. Do not run apply, type an approval phrase, install dependencies,
-change Git state, edit the project, or run any deletion command.
+Record Git status before the preview. Run a read-only scan, then explain KEEP,
+REGENERABLE, REVIEW, and BLOCKED in plain English with the reasons and any
+ambiguous or incomplete results. Keep source code, sensitive files, and local
+changes intact. Do not open or reveal secret values.
+
+Create a reviewable plan outside the repository. Summarize its candidates,
+protected and review items, and estimated logical bytes as file sizes. Show
+restoration guidance using dry-run only. Compare Git status afterward and
+report what preservation checks established. Keep raw output, paths, and notes
+private, and report errors, skipped checks, and limitations honestly.
+
+Never run production apply, approve deletion, run an installer in the project,
+or use shell, Git, or other commands as a substitute for deletion.
 ```
 
-## Verification record
+## Troubleshooting
 
-| Host or capability | Evidence | Status |
-|---|---|---|
-| GitHub Skills CLI project install | Local-source install into a disposable Git project; verified destination and `SKILL.md` contents. | Verified in isolated smoke test. |
-| GitHub Skills CLI user install | User-scope install into an isolated temporary home; verified destination without changing the real user skill directory. | Verified in isolated smoke test. |
-| Codex session | Followed the skill's read-only scan workflow on a disposable Git project; scan passed and the external sentinel was unchanged. | Verified for that Codex session and local CLI. |
-| `codex exec` subprocess | Attempted with the installed project-scoped skill. | Not verified; configured model was rejected as unsupported for the signed-in ChatGPT account. |
-| Gemini CLI | Checked executable availability. | Not tested; CLI was not installed. |
-| Google Antigravity | Launcher was present; attempted desktop inspection. | Not verified; desktop control failed to initialize, so no invocation occurred. |
-
-Official host documentation establishes documented discovery and invocation behavior; it does not replace Hibernator-specific runtime testing. The project/package matrix and host invocation results are tracked separately in the [release gate matrix](RELEASE_GATE_MATRIX.md).
+| Symptom | What to check |
+| --- | --- |
+| The skill is missing | Confirm the complete `hibernator/SKILL.md` folder is under a discovery directory supported by that host. Restart the session or paste the prompt. |
+| The agent finds the skill but cannot run Hibernator | Run the doctor check with Python from the CLI installation environment. The wheel includes the Skill file but does not register it with a host. |
+| The agent cannot reach your project | Check that the agent runs locally, can read the exact Git root, and can write to the separate output folder. |
+| The scan or plan reports an error | Ask for the exact failing step and what it could verify. Use [CLI troubleshooting](../README.md#troubleshooting-and-uninstall) or the [hands-on test guide](USER_TESTING.md). |

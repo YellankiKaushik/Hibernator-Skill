@@ -1,107 +1,63 @@
 # Hibernator
 
-**PREVIEW — PRODUCTION DELETION DISABLED**
+**See what takes up space in an inactive coding project, then review what could be recreated.**
 
-Hibernator is a local, Git-aware Python tool for inspecting one development repository, identifying a small set of well-evidenced generated dependencies or caches, and preparing a reviewable plan. It helps developers understand why inactive projects grow: package installations, virtual environments, bytecode, and framework caches can remain long after the work is done.
+Hibernator is a local, Git-aware Python tool. It scans one repository, explains what it would preserve, and prepares a plan you can inspect before making any decisions.
 
-The preview can scan, classify, validate plans, save reports, and show restoration guidance. It **cannot delete files from a user's project**. Even a correct interactive approval ends with an unsupported-operation report and no project changes. No disk space is reclaimed by this version.
+> **PREVIEW — PRODUCTION DELETION DISABLED**
+>
+> This build scans, classifies, writes plans and reports, and previews restoration. Project files stay in place.
 
-Current cross-platform validation: [GitHub Actions run #13](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/43848601766) passed 18/18 jobs on the consolidated `main` commit. See the [release gate matrix](docs/RELEASE_GATE_MATRIX.md) for platform skips and remaining security gates.
+[![Watch the Hibernator preview demo showing a synthetic Git project](docs/media/hibernator-preview-poster.jpg)](https://github.com/YellankiKaushik/Hibernator-Skill/raw/refs/heads/main/docs/media/hibernator-preview-demo.mp4)
+
+[Watch or download the 22-second MP4](https://github.com/YellankiKaushik/Hibernator-Skill/raw/refs/heads/main/docs/media/hibernator-preview-demo.mp4) · [Demo and audio credits](docs/media/README.md)
 
 ## Contents
 
-- [Overview](#overview)
-- [How it works](#how-it-works)
-- [Features and supported project types](#features-and-supported-project-types)
-- [Requirements and verified platforms](#requirements-and-verified-platforms)
-- [Installation](#installation)
-- [Quick start](#quick-start)
-- [Command reference](#command-reference)
-- [Examples](#examples)
-- [AI-agent integrations](#ai-agent-integrations)
-- [Security and privacy](#security-and-privacy)
-- [Restoration and recovery](#restoration-and-recovery)
-- [Troubleshooting](#troubleshooting)
-- [Development and contributions](#development-and-contributions)
-- [License and roadmap](#license-and-roadmap)
-- [Uninstall](#uninstall)
+[Install](#installation) · [Quick start](#quick-start) · [Understand the results](#scan-classifications) · [Use an AI agent](#use-hibernator-with-your-ai-coding-agent) · [Safety](#privacy-and-security) · [Get help](#troubleshooting-and-uninstall)
 
-## Overview
+## Why Hibernator?
 
-Inactive repositories can retain `node_modules`, Python virtual environments, test caches, bytecode, and framework build caches. Their names alone do not prove that their contents are safe to remove. A dependency directory may also contain local patches, secrets, downloaded data, or files somebody deliberately saved there.
-
-Hibernator is for developers reviewing **one existing Git repository at a time**. It gives a conservative inventory, explains its decisions, estimates logical file lengths, and creates a plan bound to the repository and its current state. It does not replace backups, version control, or human review.
-
-### Decisions shown by a scan
-
-| Decision | Meaning |
-|---|---|
-| `KEEP` | Known source, tracked content, secret-like content, or other content that the scanner preserves. |
-| `REGENERABLE` | A narrow artifact rule matched project evidence and the candidate contains no detected protected descendants. It can be proposed in a plan; this preview still will not delete it. |
-| `REVIEW` | The scanner cannot establish safe regeneration, such as for unknown files, local data, downloads, missing manifests, or ambiguous project context. |
-| `BLOCKED` | A recognized candidate failed a safety check, for example because it contains tracked content, a link/reparse point, nested Git data, a filesystem boundary, or unreadable content. |
-
-Ignore rules, download source, generated-looking names, or a directory called `cache`, `build`, `.venv`, or `node_modules` are never enough on their own. Unknown files remain protected or visible for review.
-
-Tracked files, untracked local work, `.env` secrets, local databases, datasets, uploads, model files, and unknown content are preserved or marked for review. If any protected content is inside a candidate directory, the whole candidate is blocked.
+Old projects accumulate Node dependencies, Python virtual environments, framework caches, bytecode, and build artifacts. Some of these can be recreated from the source and lockfiles. A generated-looking folder can also hold local changes, private data, or files that Git tracks. Folder names and ignore rules alone tell you little about what you can safely recreate.
 
 ## How it works
 
-The intended product workflow is **Scan → Classify → Validate → Human approval → Clean → Report**:
+```text
+Scan → Classify → Validate → Human approval → Clean → Report
+```
 
-1. **Scan:** read one selected Git repository and summarize technologies, paths, and logical sizes.
-2. **Classify:** apply versioned, positive-evidence rules and report a reason for every surfaced item.
-3. **Validate:** bind a plan to the project root identity, Git state, candidate identity and contents, exclusions, and rule version. A later change makes the plan stale.
-4. **Human approval:** display the exact plan and request its full digest in an interactive terminal. A digest is an integrity check, not proof of who typed it.
-5. **Clean:** **unavailable for real projects in this preview**. The production `apply` path refuses on every platform. A separate POSIX prototype is wired only to synthetic test fixtures.
-6. **Report:** save a local status report. The report distinguishes candidate logical bytes and observed volume free-space changes; it does not attribute free-space changes to Hibernator.
+The preview supports scan, classification, plan validation, saved reports, and restoration guidance. It can detect when a saved plan is stale. The experimental approval path always refuses real cleanup, including after an exact approval phrase. **Production Clean is disabled.** [Safety model](docs/SAFETY.md)
 
-## Features and supported project types
+## Scan classifications
 
-### Available in the preview
+| Decision | What it means | Synthetic example |
+| --- | --- | --- |
+| **KEEP** | Hibernator will preserve this content. | Git-tracked source in `src/` or a secret-like `.env.local` file. |
+| **REGENERABLE** | Project evidence supports proposing the artifact in a plan. | `node_modules/` with matching Node project metadata and a lockfile, after content checks. |
+| **REVIEW** | The evidence is incomplete or the content needs human judgment. | An unrecognized `local-notes.txt` file. |
+| **BLOCKED** | A protection or inspection check excluded the artifact. | A dependency folder containing a secret-like file or a link outside the project. |
 
-- Standalone Python CLI and `python -m hibernator` entry point.
-- Git root, tracked-file, and worktree-state checks.
-- Conservative artifact classification and digest-bound plans with stale-plan validation.
-- Text and JSON scan, plan, rule, report, and restore-preview output.
-- React, Next.js, and Vite technology markers within Node.js projects.
-- Monorepo restoration suggestions that group Node workspace packages by lockfile and show per-project working directories.
-- Local scan and cleanup status reports with redacted project root fields.
-- Packaged Agent Skill at `.agents/skills/hibernator/SKILL.md`.
+**REGENERABLE** is a plan candidate label. The preview leaves every candidate in place.
 
-### Currently recognized rules
+## What the preview supports
 
-| Artifact | Evidence required | Example restoration suggestion |
-|---|---|---|
-| `node_modules` | `package.json` and a recognized npm, pnpm, or Yarn lockfile | `npm ci`, `pnpm install --frozen-lockfile`, or `yarn install --immutable` |
-| `.venv` or `venv` | Python project manifest evidence, plus conservative content checks | Create a virtual environment and reinstall from preserved project metadata |
-| `__pycache__` | Python source marker | Python recreates bytecode when run |
-| `.pytest_cache` | Pytest configuration or project metadata | Pytest recreates its cache |
-| `.next/cache` | Next.js configuration or a `next` package dependency | Next.js recreates the framework cache |
-| `node_modules/.vite` | Vite configuration or package dependency | Vite recreates its optimization cache |
+- **Git-aware scanning.** Inspect one explicit repository root. The tool considers tracked files, local changes, project markers, and narrowly scoped rules for Node.js, Python, and selected framework caches.
+- **Reviewable plans.** See candidate paths, logical byte estimates, reasons, and recovery hints. Exclude candidates by exact path. The plan binds to the inspected root, Git state, rules, and candidate contents, so relevant changes can invalidate it.
+- **Local reports.** Save a scan report, view it by file or ID, or use JSON. Report files redact the absolute project root by default.
+- **Restoration previews.** Get dependency reinstall suggestions based on manifests and lockfiles, including separate working-directory guidance for supported nested projects and monorepos.
+- **CLI and Agent Skill.** Use Hibernator directly on Windows, Linux, or macOS, or let a compatible local coding agent run the same preview. The CLI needs no AI or API key.
 
-Rules are intentionally limited. Node package `data/` directories and arbitrary editable-install `.pth` files are not assumed disposable. See [classification details](docs/DEPENDENCY_CLASSIFICATION.md).
+Cleanup, automatic dependency installation, and recovery of local-only data are outside the preview. The [CLI reference](docs/CLI.md), [rule explanations](docs/DEPENDENCY_CLASSIFICATION.md), and [usage examples](docs/USAGE_EXAMPLES.md) cover the details.
 
-### Not available
+## Requirements
 
-- Deleting or moving real project files.
-- Installing or uninstalling dependencies during scan or restore preview.
-- Network access during scan, plan, report, or restore preview.
-- Guaranteed storage savings or physical block-reclamation estimates.
-- Recovery of local-only files, private downloads, secrets, databases, credentials, or remote services.
-
-## Requirements and verified platforms
-
-- Windows, Linux, or macOS with Python **3.10–3.14** and Git available on `PATH`.
-- The CLI uses the Python standard library at runtime.
-- Package installation/build uses `setuptools>=77` through PEP 517. An isolated build may need a package index or a compatible setuptools build dependency already available.
-- Hibernator does not require an AI model. Agent invocation requires a compatible host with local terminal access and a separately installed Python CLI.
-
-The full workflow matrix has passed on GitHub Actions for Windows, Ubuntu, and macOS with Python 3.10–3.14. That verifies preview tests, wheel construction, console command startup, and packaged skill-file presence. It does **not** certify production deletion or every filesystem. Windows junction cases are skipped on the hosted runners; skips remain unverified. See [the release gate matrix](docs/RELEASE_GATE_MATRIX.md) for the current evidence.
+- **Python 3.10 or later** and **Git on your PATH**. CI covers Python 3.10–3.14 on Windows, Ubuntu, and macOS.
+- Source installation uses `setuptools>=77` as its build backend. The installer may download it if it is unavailable locally. The installed CLI has no third-party runtime dependencies.
+- A local terminal with read access to the chosen Git repository and a writable folder outside it for plans and reports.
 
 ## Installation
 
-Clone the repository, then install the Python package into a virtual environment. Skill installation is a separate step; see [AI-agent integrations](#ai-agent-integrations).
+Clone Hibernator into a tools folder, separate from any project you want to inspect. Create an isolated Python environment so the installation stays with this checkout.
 
 ### Windows PowerShell
 
@@ -113,7 +69,9 @@ py -3 -m venv .venv
 .\.venv\Scripts\hibernator.exe doctor
 ```
 
-### Linux shell
+Use `python -m venv .venv` if your Windows installation provides `python` but lacks the `py` launcher. If the Hibernator executable is unavailable, run `.\.venv\Scripts\python.exe -m hibernator doctor`. This also works without enabling PowerShell activation scripts.
+
+### Linux and macOS
 
 ```sh
 git clone https://github.com/YellankiKaushik/Hibernator-Skill.git
@@ -123,224 +81,116 @@ python3 -m venv .venv
 .venv/bin/hibernator doctor
 ```
 
-### macOS Terminal
+Use `.venv/bin/python -m hibernator doctor` if the console command is unavailable. On Linux, install your distribution’s Python venv package if Python reports that it cannot create a virtual environment.
 
-```sh
-git clone https://github.com/YellankiKaushik/Hibernator-Skill.git
-cd Hibernator-Skill
-python3 -m venv .venv
-.venv/bin/python -m pip install .
-.venv/bin/hibernator doctor
-```
-
-For development, use `python -m pip install -e .` instead of `python -m pip install .`. Activation is optional: invoke the virtual environment's `python` and `hibernator` paths directly, as above. If PowerShell blocks activation scripts, these direct paths avoid activation entirely.
-
-To use the module without installing the console entry point from a checkout, run `python -m hibernator ...` from the checkout with the same interpreter that has the package available. Check the interpreter with `python --version`; Hibernator requires 3.10 or later.
+In an activated environment, `hibernator` and `python -m hibernator` run the same CLI. You can also use the full installed command or module path above from the Hibernator checkout.
 
 ## Quick start
 
-Use a repository you own and have reviewed. The commands below only scan, plan, and preview restoration; the preview cannot delete files.
+Choose an inactive Git repository you own. Replace the example path with that repository's root and keep the quotes. On Windows you can use a path such as `C:/work/inactive-demo`. Run these commands with your installed Hibernator command from [Installation](#installation).
 
-```sh
+```text
 hibernator doctor
-hibernator scan --project PATH
-hibernator plan --project PATH
-hibernator restore --project PATH --dry-run
+hibernator scan --project "/work/inactive-demo"
+hibernator plan --project "/work/inactive-demo"
+hibernator restore --project "/work/inactive-demo" --dry-run
 ```
 
-On Windows PowerShell, quote paths that contain spaces:
+1. **Doctor** checks the runtime, Git availability, and preview status.
+2. **Scan** explains each classification and displays its logical size.
+3. **Plan** lists eligible candidates and saves a reviewable file outside the project. It can contain zero candidates. The command leaves the project in place.
+4. **Restore preview** shows proposed steps without running installers.
 
-```powershell
-hibernator scan --project "C:\work\My Project"
-hibernator plan --project "C:\work\My Project" --output "$env:TEMP\hibernator-plan.json"
-hibernator restore --project "C:\work\My Project" --dry-run
+Try all four steps on a [disposable Git project](docs/USER_TESTING.md) before scanning a project you care about.
+
+## Inspect an inactive Git project
+
+From a directory inside the chosen repository, use `git --no-optional-locks rev-parse --show-toplevel` to identify its root. Record `git --no-optional-locks status --porcelain=v1 --untracked-files=all` before starting. Scan the root, read the reasons, and review the plan. Use `--output` with an absolute file path in a private folder outside the repository if you want to control where the plan is written.
+
+In the demo’s synthetic Node.js fixture, Hibernator classified the dependency folder as `REGENERABLE`, the source and fake secret marker as `KEEP`, and a local note as `REVIEW`. The plan listed one candidate with **24 logical bytes**. This was the sum of the candidate's file lengths. The preview reclaimed no disk space.
+
+Run the restoration preview, then repeat the Git status command and compare it with the baseline. Git status reports changes Git can see. For a stronger check on selected files, compare their hashes before and after, including ignored files you care about. The [hands-on guide](docs/USER_TESTING.md#9-scan-a-real-repository-from-windows-powershell) walks Windows users through saving private results.
+
+To save an inventory separately from a plan, add `--save-report` to the scan command. Reopen the saved report with `hibernator report --file PATH`. The [CLI reference](docs/CLI.md) explains JSON output and report IDs.
+
+## Use Hibernator with Your AI Coding Agent
+
+Open an agent with local terminal access and grant it permission to inspect only the folder you choose. The README and Agent Skill provide instructions. Filesystem and command access depend on the agent host and its permissions.
+
+- **Codex:** The checkout carries a discoverable project skill. A Codex session has run a synthetic scan with the Hibernator workflow.
+- **Claude Code, Gemini CLI, Google Antigravity, and Cursor:** Their documented skill discovery or manual setup is covered in the [Agent Skill guide](docs/AGENTS.md). Hibernator invocation in these hosts has not been verified.
+- **Other terminal-capable agents:** Install the CLI where the agent's terminal runs, then paste the prompt below. The prompt works without native skill discovery if the agent can run the CLI.
+
+### Copy-paste prompt
+
+```text
+Help me preview one inactive Git project with Hibernator.
+
+Ask for or confirm the exact local Git repository root and an existing private
+output folder outside that repository. If Hibernator is missing, help me install
+the CLI from its trusted source in a separate environment. Confirm Git and local
+terminal access. Run Hibernator's doctor check before inspecting the project.
+
+Record Git status before the preview. Run a read-only scan, then explain KEEP,
+REGENERABLE, REVIEW, and BLOCKED in plain English with the reasons and any
+ambiguous or incomplete results. Keep source code, sensitive files, and local
+changes intact. Do not open or reveal secret values.
+
+Create a reviewable plan outside the repository. Summarize its candidates,
+protected and review items, and estimated logical bytes as file sizes. Show
+restoration guidance using dry-run only. Compare Git status afterward and
+report what preservation checks established. Keep raw output, paths, and notes
+private, and report errors, skipped checks, and limitations honestly.
+
+Never run production apply, approve deletion, run an installer in the project,
+or use shell, Git, or other commands as a substitute for deletion.
 ```
 
-On Unix-like shells:
+See [Agent Skill installation, discovery, and troubleshooting](docs/AGENTS.md). The CLI and skill are installed separately.
 
-```sh
-hibernator scan --project "$HOME/work/my-project"
-hibernator plan --project "$HOME/work/my-project" --output "$HOME/hibernator-plan.json"
-hibernator restore --project "$HOME/work/my-project" --dry-run
-```
+## Restoration guidance
 
-Read each scan reason and the complete plan before continuing. `apply` revalidates the saved plan, but it always refuses actual cleanup in this version—even after an exact interactive digest is entered. Follow the [hands-on testing guide](docs/USER_TESTING.md) for installation and a disposable fixture. It includes [Windows instructions for a read-only real-project preview](docs/USER_TESTING.md#9-scan-a-real-repository-from-windows-powershell).
+`restore --dry-run` reads supported manifests and lockfiles. For example, an npm lockfile can produce a suggested `npm ci` step. Nested projects can receive their own working-directory hints. Review the suggestion and any warnings before running a package manager yourself.
 
-### Inspecting output and reports
+The preview leaves installers unexecuted. Reinstalling dependencies cannot recover local-only files, secrets, databases, custom edits inside generated directories, or data that exists nowhere else. See the [restoration guide](docs/RESTORE_GUIDANCE.md).
 
-Use `--format json` on supported commands for structured output. `scan --save-report` stores a local scan report. An `apply` request stores a cleanup status report even though it does not delete. Each report includes a report ID that can be read with `report --id ID`; a report file can also be read with `report --file PATH`.
+## Privacy and security
 
-Reports are stored outside the scanned project: under `%LOCALAPPDATA%\hibernator\reports` on Windows, or `$XDG_STATE_HOME/hibernator/reports` (falling back to `~/.local/state/hibernator/reports`) on Linux/macOS. Saved reports redact the absolute project root, but still contain relative filenames and project structure; review them before sharing. Plan files include the selected absolute root and should also be treated as local project metadata.
+- Scan, plan, and restore preview work offline and leave the target repository untouched. Plans and saved reports are written outside it.
+- Git-tracked content and local changes are protected by conservative rules. Unknown content is preserved or flagged for review. Secret-like names are protected without reading their values for classification.
+- Traversal rejects or skips filesystem boundaries such as symlinks, reparse points, nested Git repositories, and different-device entries where applicable. Actual filesystem behavior varies by platform.
+- A plan digest detects changes to the recorded plan. It provides no proof of human approval. Plans may contain absolute paths, and even redacted reports can reveal filenames and project structure. Keep raw results private.
 
-## Command reference
+Production deletion requires platform-specific filesystem evidence, an independent review of the exact implementation, and explicit owner approval. The [safety model](docs/SAFETY.md), [independent review gate](docs/SECURITY_REVIEW_GATE.md), and [security policy](SECURITY.md) govern this boundary.
 
-Run `hibernator --help` or `python -m hibernator --help` for current syntax.
+## Testing and validation
 
-| Command | Options | Purpose |
-|---|---|---|
-| `hibernator doctor` | `--format text\|json` | Show Python, Git availability, platform, reports directory, and deletion-disabled status. |
-| `hibernator scan --project PATH` | `--format text\|json`, `--show-paths`, `--save-report` | Read-only inventory, technology markers, classifications, and logical byte lengths. Absolute paths are redacted by default. |
-| `hibernator plan --project PATH` | `--format text\|json`, repeatable `--exclude RELATIVE_PATH`, `--output PATH` | Create and save a reviewable plan outside the selected project. |
-| `hibernator apply --plan PATH` | `--format text\|json` | Revalidate and request exact interactive confirmation; then records `APPROVED_BUT_UNSUPPORTED` without deleting. Noninteractive use records `APPROVAL_REQUIRED`. |
-| `hibernator report --id ID` | `--format text\|json` | Load a report by its 32-character ID from the local report store. |
-| `hibernator report --file PATH` | `--format text\|json` | Load a report from a specified JSON file. |
-| `hibernator restore --project PATH --dry-run` | `--format text\|json`, `--show-paths` | Print non-mutating dependency restoration suggestions. `--dry-run` is required. |
-| `hibernator rules list` | `--format text\|json` | Display the versioned artifact rules. |
+The [verified baseline CI run](https://github.com/YellankiKaushik/Hibernator-Skill/actions/runs/45579668204) passed 18 of 18 jobs for commit `76fda646ec9b9d42f2fc2b87ad84d1502a413fd2`. It covers Python 3.10–3.14 on Windows, Ubuntu, and macOS, including synthetic fixtures, wheel build and installation, installed console startup, and Agent Skill packaging. Windows junction fixture checks and other platform-specific cases can skip. Those cases remain unverified. CI does not certify production deletion.
 
-`--show-paths` includes absolute project paths in local output. Scan and restore default to redacting them. Plans deliberately retain the full root because validation is bound to the exact target.
+See [testing instructions](docs/TESTING.md) and the [release gate matrix](docs/RELEASE_GATE_MATRIX.md) for coverage and remaining checks.
 
-### Exit codes
+## Architecture
 
-| Code | Meaning |
-|---:|---|
-| `0` | Command completed; restore produced at least one suggestion. |
-| `2` | Invalid or unsupported input/project root, or Git is unavailable to `doctor`. |
-| `3` | Incomplete, unverified, or unsupported operation; includes exact approval with production cleanup disabled, or restore with no supported command. |
-| `4` | Invalid, tampered, stale, or unreadable plan/report. |
-| `5` | Approval is unavailable or was declined. |
-| `6` | Partial cleanup outcome; reserved while production cleanup is disabled. |
-| `7` | Critical preservation/integrity failure; reserved while production cleanup is disabled. |
-| `8` | Internal or filesystem I/O error. |
+`git_state` and `discovery` inspect the repository. `rules` assigns classifications, `plans` creates and validates plans, and `reports` and `restore` produce review output. `cli` exposes these workflows. The Agent Skill tells compatible agents how to operate the CLI. [Architecture notes](docs/ARCHITECTURE.md)
 
-For details, refer to the [CLI reference](docs/CLI.md).
+## Roadmap and limitations
 
-## Examples
+The next step is owner-led, read-only acceptance testing on an inactive repository, followed by usability improvements based on that feedback. Production deletion needs further filesystem engineering and independent review. Release and cleanup decisions remain separate from this preview.
 
-All paths and data descriptions in this section are illustrative; examples are not benchmark results.
+## Contribute or report a problem
 
-### Node.js
+Open a [GitHub issue](https://github.com/YellankiKaushik/Hibernator-Skill/issues) with your OS, Python and Git versions, observed behavior, and a minimal synthetic reproduction. Keep secrets and raw project data private. Follow the [contribution guide](docs/CONTRIBUTING.md) and use the [security reporting process](SECURITY.md) for suspected vulnerabilities.
 
-With `package.json`, `package-lock.json`, `src/`, and `node_modules/`, Hibernator can identify the dependency directory as a candidate when the tree contains no protected or unknown descendants. The plan remains a proposal; real cleanup is unavailable.
+Hibernator is distributed under the [MIT License](LICENSE).
 
-```sh
-hibernator scan --project ./sample-node-app
-hibernator plan --project ./sample-node-app --exclude node_modules
-hibernator restore --project ./sample-node-app --dry-run
-```
+## Troubleshooting and uninstall
 
-An untracked patch or `.env` file inside `node_modules`, a nested Git repository, a link, or an unknown file blocks the whole candidate. Package `data/` directories remain conservative because downloaded or modified content cannot be ruled out by package name alone.
+| Problem | What to try |
+| --- | --- |
+| Python or Git is unavailable | Check the installed versions with `python --version` or `py -3 --version` and `git --version`. Restart the terminal after installation. |
+| Python cannot create the environment, or pip cannot build the package | Check venv support and whether pip can obtain the declared build dependency. Retry from the Hibernator checkout. |
+| The Hibernator command is unavailable | Use the installation environment's Python with `-m hibernator`. |
+| The agent cannot find the Skill | Open a trusted checkout, check the host-specific discovery path and permissions, then start a new session. Use the copy-paste prompt if needed. |
+| A scan is refused or incomplete | Confirm you selected the Git root and have read access. Review the exact reported reason before trying again. [FAQ](docs/FAQ.md) |
 
-### Python
-
-With `pyproject.toml` and `.venv/`, Hibernator reports the Python project markers and may classify a verified environment as regenerable. Editable-install files are accepted only when their generated metadata verifies a local editable source inside the project. External or unverified `.pth` targets stay protected.
-
-```sh
-hibernator scan --project ./sample-python-app --format json
-hibernator plan --project ./sample-python-app
-hibernator restore --project ./sample-python-app --dry-run
-```
-
-### React, Next.js, and Vite
-
-The scanner detects React from package dependencies, Next.js from its dependency or configuration, and Vite from its dependency or configuration. A `.next/cache` candidate needs Next.js evidence. Lockfiles determine Node restore suggestions; multiple lockfiles cause an ambiguity warning instead of a guessed package manager.
-
-```sh
-hibernator scan --project ./sample-next-app
-hibernator restore --project ./sample-next-app --dry-run
-```
-
-### Monorepo
-
-The restore preview groups Node manifests by their nearest recognized ancestor lockfile. Independently locked nested projects get separate working-directory suggestions; conflicting lockfiles and packages without a supported lockfile are reported for review. Python projects receive per-project virtual-environment suggestions.
-
-```sh
-hibernator restore --project ./sample-monorepo --dry-run --format json
-```
-
-Restoration commands are suggestions only. Review the working directory, lockfile, private registry requirements, and lifecycle scripts before running any package manager yourself.
-
-## AI-agent integrations
-
-An **Agent Skill** is a folder containing `SKILL.md` instructions that a compatible host can discover and apply to relevant tasks. Hibernator's skill delegates classification to the local CLI; the skill does not install that CLI. Install the skill and Python package separately.
-
-### OpenAI Codex
-
-The repository includes a project-level skill at `.agents/skills/hibernator/SKILL.md`. When using the cloned project as the target workspace, Codex can discover that project skill. To install it through GitHub CLI (`gh skill`) from a local checkout:
-
-```sh
-gh skill install /path/to/Hibernator-Skill hibernator --from-local --allow-hidden-dirs --agent codex --scope project
-```
-
-Use `--scope user` for a user-wide installation. Verify the resulting skill with Codex's skill listing. This installs instructions only; install the Python package separately. In this project environment, a Codex session successfully followed the skill's scan workflow on a disposable Git repository. A separate `codex exec` run with the configured model was not verified.
-
-### Gemini CLI
-
-Gemini CLI documents `.agents/skills/` as a workspace and user discovery location. With Gemini CLI installed, you can install this skill into the current workspace with:
-
-```sh
-gemini skills install https://github.com/YellankiKaushik/Hibernator-Skill --path .agents/skills/hibernator --scope workspace
-gemini skills list
-```
-
-Or use the skill already present in a trusted clone of this repository. In an interactive session, check `/skills list`, reload with `/skills reload` if needed, then ask Gemini to inspect a project. Gemini CLI was not installed in the validation environment, so invocation has not been tested here. See the [official Gemini CLI skill guide](https://geminicli.com/docs/cli/skills/).
-
-### Google Antigravity
-
-The Antigravity App, IDE, and CLI document `.agents/skills/` for workspace skills. Open the cloned Hibernator repository as the workspace, inspect the discovered skill, and invoke `/hibernator` in the app/CLI or request a Hibernator scan. The documented global skill location is `~/.gemini/config/skills/hibernator/`. The Antigravity host was not successfully launched in this validation environment; invocation is unverified. See [Google's Antigravity Agent Skills guide](https://antigravity.google/docs/skills).
-
-### Other terminal-capable agents
-
-An agent that can run local commands may follow the same skill instructions or call `python -m hibernator` itself. It must have the Python package installed in the interpreter available to that terminal. An agent without local filesystem access can only explain the documentation; it cannot inspect files that are not provided to its runtime. Agents must not approve or perform real deletion.
-
-Use the [copy-and-paste prompt](docs/AGENTS.md#copy-and-paste-prompt-for-any-terminal-capable-coding-agent) with any agent that can run local commands. See [agent setup and verification](docs/AGENTS.md) for installation and host verification.
-
-## Security and privacy
-
-- Scan, plan, report, and restore preview do not contact network services, invoke package managers, or write into the selected project. Package installation may access a package index to obtain build dependencies.
-- Scan and restore traversal refuse or skip symlinks/reparse points, nested Git repositories, and different-device crossings. These read-only path walks are not atomic snapshots and are not race-resistant deletion controls.
-- Plans include the absolute root, Git snapshots, candidate identities, tree digests, exclusions, rule version, and plan digest. The digest detects stale or edited state; it does not authenticate a user.
-- Saved reports redact the project root, but can still disclose relative file names and project structure. `--show-paths`, terminal output, and plan files can expose absolute local paths. Review before sharing.
-- The scanner does not read secret file contents for classification. Secret-like files are preserved. Do not post reports or plans publicly without reviewing them.
-- No telemetry or remote account is used by scan or restore preview.
-
-Production cleanup is disabled because no independently reviewed, race-resistant deletion design is available for the supported host filesystems. The current POSIX descriptor-relative prototype is unwired and limited to test-owned fixtures. Root relocation, same-device bind mounts, Windows handle/reparse behavior, durable replay barriers, and a human-enforceable approval boundary remain open. Read [the safety model](docs/SAFETY.md), [cleanup design status](docs/PRODUCTION_CLEANUP_DESIGN.md), and [security review gate](docs/SECURITY_REVIEW_GATE.md).
-
-## Restoration and recovery
-
-`restore --dry-run` reads supported manifests and lockfiles and prints suggested commands; it does not create a virtual environment or install anything. For Node workspaces it associates manifests with the nearest recognized lockfile and warns about ambiguous managers. For Python it suggests a virtual environment and may suggest installing from `requirements.txt` or `pyproject.toml`.
-
-This preview has not deleted project files, and its restore guide is not a backup system. It cannot reconstruct local-only files, ignored datasets, secrets, uploads, databases, private packages, or services. Read [restoration guidance](docs/RESTORE_GUIDANCE.md) before using suggestions.
-
-## Troubleshooting
-
-| Problem | What to check |
-|---|---|
-| `python` or `hibernator` is not found | Confirm Python 3.10+ and Git are on `PATH`. Use the virtual environment's direct Python/CLI path or `python -m hibernator`. |
-| `doctor` reports Git unavailable | Install Git for your OS and reopen the terminal so `git` is on `PATH`. |
-| Project root is unsupported | Pass the root of one existing Git repository, not a parent folder, filesystem root, or nested subdirectory. |
-| A candidate is `REVIEW` or `BLOCKED` | Read its reason. Missing lockfiles, tracked descendants, unknown files, links, nested Git, local data, unreadable entries, and device crossings are conservative blockers. Do not remove them manually based on the label. |
-| Node dependencies have no restore command | Keep the lockfile with the package manifest. Without a recognized lockfile, Hibernator does not guess which package manager to use. |
-| `apply` refuses after a plan | The plan may be stale; scan and plan again. Even a fresh, exactly approved plan is unsupported in this preview and will not delete. |
-| Skill is not available in an agent | Verify the host's skill directory and workspace trust, list/reload skills, then start a new session. Installing the Python package alone does not install a skill. |
-| Gemini CLI or Antigravity cannot run Hibernator | Install the host and the Python package in the environment its terminal uses. These invocations are documented but not verified in this project environment. |
-| Wheel build cannot fetch setuptools | Provide a package index or a compatible `setuptools>=77` build dependency/cache, then retry. The application itself has no third-party runtime dependencies. |
-| A filesystem test is skipped | Read the skip reason. Link/junction privileges and platform-only fsync behavior vary; skipped adversarial tests are unverified, not passed. |
-
-## Development and contributions
-
-```sh
-python -m unittest discover -v
-python -m compileall -q src tests
-python -m hibernator --help
-python -m pip wheel --no-deps --wheel-dir dist .
-```
-
-Tests construct and remove only their own temporary Git fixtures. Do not run destructive tests on a real project. The architecture is split across `discovery` (Git-aware inventory/classification), `rules` (positive-evidence rules), `plans` (canonical plan/staleness validation), `restore` (read-only suggestions), `reports`, and `cleaner` (production refusal plus isolated test fixture pathway). `secure_remove` is a fixture-only POSIX prototype and must remain disconnected from the public apply path.
-
-See [testing](docs/TESTING.md), [architecture](docs/ARCHITECTURE.md), [CLI reference](docs/CLI.md), [classification details](docs/DEPENDENCY_CLASSIFICATION.md), and [contribution guidance](docs/CONTRIBUTING.md). Report vulnerabilities privately according to [SECURITY.md](SECURITY.md); do not include secrets, private project contents, or full local paths in a public issue.
-
-## License and roadmap
-
-Hibernator is distributed under the [MIT License](LICENSE), copyright 2026 YellankiKaushik. Third-party tools and package-manager ecosystems remain subject to their own licenses and terms; no third-party license or permission is implied by this project.
-
-The supported scope is the preview workflow: scan, classify, plan, report, and restore suggestions. Future production cleanup would require a defined supported-filesystem matrix, platform-specific no-follow implementation, race and mount-boundary controls, durable journaling and replay protection, direct human approval, adversarial tests with no relevant skips, and independent review of the exact source revision. No release, tag, or PyPI publication is part of this consolidation.
-
-## Uninstall
-
-Uninstall the Python package from the same environment where it was installed:
-
-```sh
-python -m pip uninstall hibernator-skill
-```
-
-For a skill installed into a different project or user directory, remove only that Hibernator skill directory after checking its exact path. The GitHub CLI skill command currently has no uninstall command; the project copy in this repository is source-controlled and should normally remain in place. Removing Hibernator does not change scanned projects. Local reports and plans live separately in the Hibernator application-state directory and may be removed by their owner.
+To uninstall, run `python -m pip uninstall hibernator-skill` with the Python from the same environment you installed into. Remove any separately installed Agent Skill through its host. Keep or remove saved plans and reports according to your needs.
